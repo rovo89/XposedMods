@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Xposed Tweakbox</string>
+    <string name="launcher_name">Tweakbox</string>
+    <string name="settings_header">Most of these modifications should be compatible with Samsung-stock-based ROMs and AOSP-based ROMs. Some might be compatible with CM9 as well.\nThe settings will be effective after the next reboot (or after restarting the SystemUI for status bar related settings).</string>
+
+</resources>

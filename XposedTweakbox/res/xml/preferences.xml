@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <PreferenceScreen
+        android:key="statusbar"
+        android:title="Statusbar" >
+        <de.robv.android.xposed.library.ui.ValueSeekBarPreference
+            displayFormat="%d bars"
+            max="6"
+            min="4"
+            android:defaultValue="4"
+            android:key="num_signal_bars"
+            android:summary="Number of bars to be displayed for the signal strength indicator (Samsung only)"
+            android:title="Signal strength bars" />
+
+        <de.robv.android.xposed.library.ui.IntegerListPreference
+            android:defaultValue="0xdeadbeef"
+            android:entries="@array/statusbarColors"
+            android:entryValues="@array/statusbarColorValues"
+            android:key="statusbar_color"
+            android:summary="Color of the statusbar: %s\nNOTE: Most applications do not put anything behind the statusbar (why should they?). This will probably look weird if you are not on the home screen."
+            android:title="Background color" />
+    </PreferenceScreen>
+    <PreferenceScreen
+        android:key="battery"
+        android:title="Battery" >
+        <de.robv.android.xposed.library.ui.ValueSeekBarPreference
+            displayFormat="&lt;= %d%%"
+            android:defaultValue="5"
+            android:key="low_battery_critical"
+            android:summary="Display critical battery warning when battery level reaches this value"
+            android:title="Critical battery level" />
+        <de.robv.android.xposed.library.ui.ValueSeekBarPreference
+            displayFormat="&lt;= %d%%"
+            android:defaultValue="15"
+            android:key="low_battery_low"
+            android:summary="Display low battery warning when battery level reaches this value"
+            android:title="Low battery level" />
+        <de.robv.android.xposed.library.ui.ValueSeekBarPreference
+            displayFormat=">= %d%%"
+            android:defaultValue="20"
+            android:key="low_battery_close"
+            android:summary="Close low battery warning when battery level reaches this value."
+            android:title="Normal battery level" />
+
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="battery_full_notification"
+            android:summary="Show a notication when the phone is fully charged (Samsung only)"
+            android:title="Battery full notification" />
+    </PreferenceScreen>
+    <PreferenceScreen
+        android:key="misc"
+        android:title="Miscellaneous" >
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="crt_off_effect"
+            android:summary="When turning off the screen, make it collapse like an old TV"
+            android:title="CRT off effect" />
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="unplug_turns_screen_on"
+            android:summary="Turn the screen on when you unplug your devices from AC/USB"
+            android:title="Turn on screen when unplugging" />
+
+        <de.robv.android.xposed.library.ui.IntegerListPreference
+            android:defaultValue="2"
+            android:entries="@array/longHomePress"
+            android:entryValues="@array/longHomePressValues"
+            android:key="long_home_press_behaviour"
+            android:summary="Define what happens when you press the HOME key for a longer time:\n%s"
+            android:title="Long HOME key behaviour" />
+
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="volume_keys_skip_track"
+            android:summary="Skip to the next/previous track with a long press on the volume keys (only when the screen is off)"
+            android:title="Skip tracks with volume keys" />
+        <!--
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:dependency="volume_keys_skip_track"
+            android:key="volume_keys_skip_track_screenon"
+            android:summaryOff="The previous option is only active when the screen is turned off"
+            android:summaryOn="The previous option is active independently from the screen state"
+            android:title="... also when screen is turned on" />
+        -->
+    </PreferenceScreen>
+
+</PreferenceScreen>
