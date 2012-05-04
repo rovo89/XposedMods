@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.res.XResources;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
+import android.telephony.SignalStrength;
 import android.view.WindowManager;
 import de.robv.android.xposed.Callback;
 import de.robv.android.xposed.XposedBridge;
@@ -16,6 +17,7 @@ import de.robv.android.xposed.XposedBridge;
 
 public class XposedTweakbox {
 	public static final String MY_PACKAGE_NAME = "de.robv.android.xposed.mods.tweakbox";
+	public static int signalStrengthBars = 4;
 	
 	public static void init(String startClassName) throws Exception {
 		if (startClassName != null)
@@ -52,7 +54,6 @@ public class XposedTweakbox {
 		
 		if (pref.getBoolean("volume_keys_skip_track", false))
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
-	
 	}
 	
 	@SuppressWarnings("unused")
@@ -79,6 +80,18 @@ public class XposedTweakbox {
 					XposedBridge.log(e);
 				}
 			}
+			
+			if (pref.getInt("num_signal_bars", 4) > 4) {
+				try {
+					Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
+					XposedBridge.hookMethod(methodGetLevel, XposedTweakbox.class, "handleSignalStrengthGetLevel", Callback.PRIORITY_DEFAULT);
+					
+					Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
+					XposedBridge.hookMethod(methodGsmGetLevel, XposedTweakbox.class, "handleSignalStrengthGetGsmLevel", Callback.PRIORITY_DEFAULT);
+				} catch (Exception e) {
+					XposedBridge.log(e);
+				}
+			}
 		}
 	}
 	
@@ -88,8 +101,9 @@ public class XposedTweakbox {
 			SharedPreferences pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
 			
 			try {
+				signalStrengthBars = pref.getInt("num_signal_bars", 4);
 				res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator",
-						pref.getInt("num_signal_bars", 4));
+						signalStrengthBars);
 			} catch (Exception e) { XposedBridge.log(e); }
 			
 			int statusbarColor = pref.getInt("statusbar_color", 0xdeadbeef);
@@ -111,5 +125,64 @@ public class XposedTweakbox {
 		if ((Integer)args[4] == PixelFormat.RGB_565)
 			args[4] = PixelFormat.TRANSLUCENT;
 		XposedBridge.callNext(iterator, method, thisObject, args);
+	}
+	
+	// correction for signal strength level
+	@SuppressWarnings("unused")
+	private static Object handleSignalStrengthGetLevel(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+		Integer result = (Integer) XposedBridge.callNext(iterator, method, thisObject, args);
+		// value was overridden by our more specific method already
+		if (result > 10000)
+			return result - 10000;
+		
+		// interpolate for other modes
+		if (signalStrengthBars == 4 || result == 0) {
+			return result;
+			
+		} else if (signalStrengthBars == 5) {
+			if (result == 4) return 5;
+			else if (result == 3) return 4;
+			else if (result == 2) return 3;
+			else if (result == 1) return 2;
+			
+		} else if (signalStrengthBars == 6) {
+			if (result == 4) return 6;
+			else if (result == 3) return 4;
+			else if (result == 2) return 3;
+			else if (result == 1) return 2;
+		}
+		// shouldn't get here
+		return 0;
+	}
+	
+	@SuppressWarnings("unused")
+	private static Object handleSignalStrengthGetGsmLevel(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+		int asu = ((SignalStrength) thisObject).getGsmSignalStrength();
+		switch (signalStrengthBars) {
+			case 6:
+		        if (asu <= 1 || asu == 99) return 10000;
+		        else if (asu >= 12) return 10006;
+		        else if (asu >= 10) return 10005;
+		        else if (asu >= 8)  return 10004;
+		        else if (asu >= 6)  return 10003;
+		        else if (asu >= 4)  return 10002;
+		        else return 10001;
+		        
+			case 5:
+		        if (asu <= 1 || asu == 99) return 10000;
+		        else if (asu >= 12) return 10005;
+		        else if (asu >= 10) return 10004;
+		        else if (asu >= 7)  return 10003;
+		        else if (asu >= 4)  return 10002;
+		        else return 10001;
+		
+			default:
+				// original implementation (well, kind of. should not be needed anyway)
+		        if (asu <= 2 || asu == 99) return 10000;
+		        else if (asu >= 12) return 10004;
+		        else if (asu >= 8)  return 10003;
+		        else if (asu >= 5)  return 10002;
+		        else return 10001;
+		}
 	}
 }
