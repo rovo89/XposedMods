@@ -7,17 +7,20 @@ import java.util.Iterator;
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
 import android.content.res.XResources;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.telephony.SignalStrength;
 import android.view.WindowManager;
+import android.widget.TextView;
 import de.robv.android.xposed.Callback;
 import de.robv.android.xposed.XposedBridge;
 
 
 public class XposedTweakbox {
 	public static final String MY_PACKAGE_NAME = "de.robv.android.xposed.mods.tweakbox";
-	public static int signalStrengthBars = 4;
+	private static int signalStrengthBars = 4;
+	private static int statusBarClockColor = 0xffbebebe;
 	
 	public static void init(String startClassName) throws Exception {
 		if (startClassName != null)
@@ -71,14 +74,22 @@ public class XposedTweakbox {
 				}
 			}
 			
-			if (pref.getInt("statusbar_color", 0xdeadbeef) != 0xdeadbeef) {
+			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				// http://forum.xda-developers.com/showthread.php?t=1523703
 				try {
 					Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class);
 					XposedBridge.hookMethod(constructLayoutParams, XposedTweakbox.class, "handleInitLayoutParams", Callback.PRIORITY_HIGHEST);
-				} catch (Exception e) {
-					XposedBridge.log(e);
-				}
+				} catch (Exception e) {	XposedBridge.log(e); }
+			}
+			
+			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
+				try {
+					statusBarClockColor = pref.getInt("statusbar_clock_color", 0xffbebebe);
+					Method updateClock =
+							Class.forName("com.android.systemui.statusbar.policy.Clock", false, classLoader)
+							.getDeclaredMethod("updateClock");
+					XposedBridge.hookMethod(updateClock, XposedTweakbox.class, "handleUpdateClock", Callback.PRIORITY_DEFAULT);
+				} catch (Exception e) { XposedBridge.log(e); }
 			}
 			
 			if (pref.getInt("num_signal_bars", 4) > 4) {
@@ -88,9 +99,7 @@ public class XposedTweakbox {
 					
 					Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
 					XposedBridge.hookMethod(methodGsmGetLevel, XposedTweakbox.class, "handleSignalStrengthGetGsmLevel", Callback.PRIORITY_DEFAULT);
-				} catch (Exception e) {
-					XposedBridge.log(e);
-				}
+				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
 	}
@@ -106,9 +115,9 @@ public class XposedTweakbox {
 						signalStrengthBars);
 			} catch (Exception e) { XposedBridge.log(e); }
 			
-			int statusbarColor = pref.getInt("statusbar_color", 0xdeadbeef);
-			if (statusbarColor != 0xdeadbeef) {
+			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				try {
+					int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
 					res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
 				} catch (Exception e) { XposedBridge.log(e); }
 			}
@@ -184,5 +193,13 @@ public class XposedTweakbox {
 		        else if (asu >= 5)  return 10002;
 		        else return 10001;
 		}
+	}
+	
+	@SuppressWarnings("unused")
+	private static Object handleUpdateClock(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+		Object result = XposedBridge.callNext(iterator, method, thisObject, args);
+		TextView clock = (TextView) thisObject;
+		clock.setTextColor(statusBarClockColor);
+		return result;
 	}
 }

@@ -13,13 +13,20 @@
             android:summary="Number of bars to be displayed for the signal strength indicator (Samsung only)"
             android:title="Signal strength bars" />
 
-        <de.robv.android.xposed.library.ui.IntegerListPreference
-            android:defaultValue="0xdeadbeef"
-            android:entries="@array/statusbarColors"
-            android:entryValues="@array/statusbarColorValues"
+        <net.margaritov.preference.colorpicker.ColorPickerPreference
+            alphaSlider="true"
+            showCheckbox="true"
+            android:defaultValue="#ff000000"
             android:key="statusbar_color"
-            android:summary="Color of the statusbar: %s\nNOTE: Most applications do not put anything behind the statusbar (why should they?). This will probably look weird if you are not on the home screen."
+            android:summary="Color of the statusbar.\nNOTE: This will probably look weird if you are not on the home screen because most applications do not put anything behind the status bar (why should they?)"
             android:title="Background color" />
+        <net.margaritov.preference.colorpicker.ColorPickerPreference
+            alphaSlider="true"
+            showCheckbox="true"
+            android:defaultValue="#ffbebebe"
+            android:key="statusbar_clock_color"
+            android:summary="Color of the clock in the statusbar"
+            android:title="Clock color" />
     </PreferenceScreen>
     <PreferenceScreen
         android:key="battery"
@@ -83,7 +90,7 @@
             android:key="volume_keys_skip_track_screenon"
             android:summaryOff="The previous option is only active when the screen is turned off"
             android:summaryOn="The previous option is active independently from the screen state"
-            android:title="... also when screen is turned on" />
+            android:title="... also when screen is turned on" />
         -->
     </PreferenceScreen>
 

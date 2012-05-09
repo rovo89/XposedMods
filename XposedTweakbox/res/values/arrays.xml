@@ -11,19 +11,5 @@
         <item name="classical_recent">1</item>
         <item name="new_recent">2</item>
     </string-array>
-    <string-array name="statusbarColors">
-        <item name="transparent">Transparent</item>
-        <item name="semi_transparent25">Semi-transparent (25%)</item>
-        <item name="semi_transparent50">Semi-transparent (50%)</item>
-        <item name="semi_transparent75">Semi-transparent (75%)</item>
-        <item name="default">Default</item>
-    </string-array>
-    <string-array name="statusbarColorValues">
-        <item name="transparent">0</item>
-        <item name="semi_transparent25">0x3f000000</item>
-        <item name="semi_transparent50">0x7f000000</item>
-        <item name="semi_transparent75">0xbf000000</item>
-        <item name="default">0xdeadbeef</item>
-    </string-array>
 
 </resources>

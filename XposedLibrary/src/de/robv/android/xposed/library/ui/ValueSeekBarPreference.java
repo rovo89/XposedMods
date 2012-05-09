@@ -195,6 +195,8 @@ public class ValueSeekBarPreference extends Preference implements OnSeekBarChang
         // Save the instance state
         final SavedState myState = new SavedState(superState);
         myState.progress = mProgress;
+        myState.step = mStep;
+        myState.min = mMin;
         myState.max = mMax;
         return myState;
     }
@@ -234,6 +236,8 @@ public class ValueSeekBarPreference extends Preference implements OnSeekBarChang
 
             // Restore the click counter
             progress = source.readInt();
+            step = source.readInt();
+            min = source.readInt();
             max = source.readInt();
         }
 
@@ -241,8 +245,9 @@ public class ValueSeekBarPreference extends Preference implements OnSeekBarChang
         public void writeToParcel(Parcel dest, int flags) {
             super.writeToParcel(dest, flags);
 
-            // Save the click counter
             dest.writeInt(progress);
+            dest.writeInt(step);
+            dest.writeInt(min);
             dest.writeInt(max);
         }
 
