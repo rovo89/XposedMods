@@ -18,10 +18,6 @@ import de.robv.android.xposed.XposedBridge;
  * the APKs (including deodexing, recompiling, signing etc).
  */
 public class RedClock {
-	private static Method methodGetText;
-	private static Method methodSetText;
-	private static Method methodSetTextColor;
-	
 	/**
 	 * @see MethodSignatureGuide#init
 	 */
@@ -32,9 +28,6 @@ public class RedClock {
 		
 		try {
 			XposedBridge.hookLoadPackage(RedClock.class, "handleLoadPackage", Callback.PRIORITY_DEFAULT);
-			methodGetText = TextView.class.getDeclaredMethod("getText");
-			methodSetText = TextView.class.getDeclaredMethod("setText", CharSequence.class);
-			methodSetTextColor = TextView.class.getDeclaredMethod("setTextColor", Integer.TYPE);
 		} catch (Throwable t) {
 			XposedBridge.log(t);
 		}
@@ -61,16 +54,14 @@ public class RedClock {
 	
 	@SuppressWarnings("unused")
 	private static Object handleUpdateClock(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
-		if (XposedBridge.DEBUG)
-			XposedBridge.log("updating the clock");
-
 		// first let the original implementation perform its work
 		Object result = XposedBridge.callNext(iterator, method, thisObject, args);
 		// then change text and color
 		try {
-			String text = (String)methodGetText.invoke(thisObject);
-			methodSetText.invoke(thisObject, text + " :)");
-			methodSetTextColor.invoke(thisObject, Color.RED);
+			TextView tv = (TextView) thisObject;
+			String text = tv.getText().toString();
+			tv.setText(text + " :)");
+			tv.setTextColor(Color.RED);
 		} catch (Exception e) {
 			// replacing did not work.. but no reason to crash the VM! Log the error and go on.
 			XposedBridge.log(e);
