@@ -24,7 +24,7 @@
             android:value="true" />
         <meta-data
             android:name="xposedminversion"
-            android:value="1.6.*" />
+            android:value="1.7.*" />
     </application>
 
 </manifest>

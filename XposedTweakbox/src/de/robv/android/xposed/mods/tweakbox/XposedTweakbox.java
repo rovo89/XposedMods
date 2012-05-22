@@ -1,16 +1,24 @@
 package de.robv.android.xposed.mods.tweakbox;
 
+import static de.robv.android.xposed.XposedHelpers.setFloatField;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Iterator;
 
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.content.res.XResources;
+import android.content.res.XResources.ResourceNames;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.telephony.SignalStrength;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
 import de.robv.android.xposed.Callback;
@@ -19,16 +27,14 @@ import de.robv.android.xposed.XposedBridge;
 
 public class XposedTweakbox {
 	public static final String MY_PACKAGE_NAME = "de.robv.android.xposed.mods.tweakbox";
+	private static SharedPreferences pref;
 	private static int signalStrengthBars = 4;
-	private static int statusBarClockColor = 0xffbebebe;
 	
 	public static void init(String startClassName) throws Exception {
 		if (startClassName != null)
 			return;
 		
-		// we could save the preferences as static variable, but by fetching it everytime we use it,
-		// we have a change to apply settings immediately or when the app is restarted
-		SharedPreferences pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
+		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
 		
 		try {
 			if (pref.getBoolean("crt_off_effect", false)) {
@@ -52,6 +58,16 @@ public class XposedTweakbox {
 			XResources.setSystemWideReplacement("android", "integer", "config_lowBatteryCloseWarningLevel", pref.getInt("low_battery_close", 20));
 		} catch (Exception e) { XposedBridge.log(e); }
 		
+		try {			
+			Method displayInit = Display.class.getDeclaredMethod("init", int.class);
+			XposedBridge.hookMethod(displayInit, XposedTweakbox.class, "handleDisplayInit", Callback.PRIORITY_DEFAULT);
+			
+			Class<?> classCompatibilityInfo = Class.forName("android.content.res.CompatibilityInfo");
+			Method methodUpdateConfiguration = Resources.class.getDeclaredMethod("updateConfiguration",
+					Configuration.class, DisplayMetrics.class, classCompatibilityInfo);
+			XposedBridge.hookMethod(methodUpdateConfiguration, XposedTweakbox.class, "handleUpdateConfiguration", Callback.PRIORITY_DEFAULT);
+		} catch (Exception e) { XposedBridge.log(e); }
+		
 		XposedBridge.hookLoadPackage(XposedTweakbox.class, "handleLoadPackage", Callback.PRIORITY_DEFAULT);
 		XposedBridge.hookInitPackageResources(XposedTweakbox.class, "handleInitPackageResources", Callback.PRIORITY_DEFAULT);
 		
@@ -62,7 +78,8 @@ public class XposedTweakbox {
 	@SuppressWarnings("unused")
 	private static void handleLoadPackage(String packageName, ClassLoader classLoader) {
 		if (packageName.equals("com.android.systemui")) {
-			SharedPreferences pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
+			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+			
 			if (!pref.getBoolean("battery_full_notification", true)) {
 				try {
 					Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, classLoader);
@@ -82,16 +99,6 @@ public class XposedTweakbox {
 				} catch (Exception e) {	XposedBridge.log(e); }
 			}
 			
-			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
-				try {
-					statusBarClockColor = pref.getInt("statusbar_clock_color", 0xffbebebe);
-					Method updateClock =
-							Class.forName("com.android.systemui.statusbar.policy.Clock", false, classLoader)
-							.getDeclaredMethod("updateClock");
-					XposedBridge.hookMethod(updateClock, XposedTweakbox.class, "handleUpdateClock", Callback.PRIORITY_DEFAULT);
-				} catch (Exception e) { XposedBridge.log(e); }
-			}
-			
 			if (pref.getInt("num_signal_bars", 4) > 4) {
 				try {
 					Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
@@ -107,7 +114,7 @@ public class XposedTweakbox {
 	@SuppressWarnings("unused")
 	private static void handleInitPackageResources(String packageName, XResources res) {
 		if (packageName.equals("com.android.systemui")) {
-			SharedPreferences pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
+			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 			
 			try {
 				signalStrengthBars = pref.getInt("num_signal_bars", 4);
@@ -119,6 +126,12 @@ public class XposedTweakbox {
 				try {
 					int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
 					res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
+				} catch (Exception e) { XposedBridge.log(e); }
+			}
+			
+			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
+				try {
+					res.hookLayout("com.android.systemui", "layout", "tw_status_bar", XposedTweakbox.class, "handleStatusbarInflated", Callback.PRIORITY_DEFAULT);
 				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
@@ -196,10 +209,52 @@ public class XposedTweakbox {
 	}
 	
 	@SuppressWarnings("unused")
-	private static Object handleUpdateClock(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+	private static Object handleDisplayInit(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
 		Object result = XposedBridge.callNext(iterator, method, thisObject, args);
-		TextView clock = (TextView) thisObject;
-		clock.setTextColor(statusBarClockColor);
+		try {
+			String packageName = AndroidAppHelper.currentPackageName();
+			
+			int packageDensity = pref.getInt("dpioverride/" + packageName + "/density", pref.getInt("dpioverride/default/density", 0));
+			if (packageDensity > 0)
+				setFloatField(thisObject, "mDensity", packageDensity / 160.0f);
+			
+		} catch (Exception e) {
+			XposedBridge.log(e);
+		}
 		return result;
+	}
+	
+	@SuppressWarnings("unused")
+	private static Object handleUpdateConfiguration(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+		try {
+			String packageName = AndroidAppHelper.currentPackageName();
+			Configuration config = (Configuration) args[0];
+			
+			int swdp = pref.getInt("dpioverride/" + packageName + "/swdp", pref.getInt("dpioverride/default/swdp", 0));
+			if (swdp > 0)
+				config.smallestScreenWidthDp = swdp;
+			
+			int wdp = pref.getInt("dpioverride/" + packageName + "/wdp", pref.getInt("dpioverride/default/wdp", 0));
+			if (wdp > 0)
+				config.screenWidthDp = wdp;
+			
+			int hdp = pref.getInt("dpioverride/" + packageName + "/hdp", pref.getInt("dpioverride/default/hdp", 0));
+			if (hdp > 0)
+				config.screenHeightDp = hdp;
+			
+		} catch (Exception e) {
+			XposedBridge.log(e);
+		}
+		return XposedBridge.callNext(iterator, method, thisObject, args);
+	}
+	
+	@SuppressWarnings("unused")
+	private static void handleStatusbarInflated(View view, ResourceNames resNames, String variant, XResources res) {
+		if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
+			try {
+				TextView clock = (TextView) view.findViewById(res.getIdentifier("clock", "id", "com.android.systemui"));
+				clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
+			} catch (Exception e) { XposedBridge.log(e); }
+		}
 	}
 }
