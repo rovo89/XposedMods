@@ -1,7 +1,10 @@
 package de.robv.android.xposed.mods.tweakbox;
 
+import static de.robv.android.xposed.XposedHelpers.assetAsByteArray;
+import static de.robv.android.xposed.XposedHelpers.getMD5Sum;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 
+import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Iterator;
@@ -10,6 +13,7 @@ import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.XModuleResources;
 import android.content.res.XResources;
 import android.content.res.XResources.ResourceNames;
 import android.graphics.Color;
@@ -26,6 +30,7 @@ import de.robv.android.xposed.XposedBridge;
 
 
 public class XposedTweakbox {
+	private static final String MODULE_PATH = null; // injected by XposedBridge
 	public static final String MY_PACKAGE_NAME = "de.robv.android.xposed.mods.tweakbox";
 	private static SharedPreferences pref;
 	private static int signalStrengthBars = 4;
@@ -35,10 +40,25 @@ public class XposedTweakbox {
 			return;
 		
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
+		Resources tweakboxRes = XModuleResources.createInstance(MODULE_PATH, null);
 		
 		try {
 			if (pref.getBoolean("crt_off_effect", false)) {
 				XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
+				
+				if (pref.getBoolean("crt_off_library_fix", false)) {
+					// apply CRT off fix by Tungstwenty
+					String libsurfaceflingerMD5 = getMD5Sum(new File("/system/lib/libsurfaceflinger.so"));
+					if (libsurfaceflingerMD5.equals("d506192d5049a4042fb84c0265edfe42")) {
+						byte[] crtPatch = assetAsByteArray(tweakboxRes, "crtfix_samsung_d506192d5049a4042fb84c0265edfe42.bsdiff");
+						if (!XposedBridge.patchNativeLibrary("/system/lib/libsurfaceflinger.so", crtPatch, "/system/bin/surfaceflinger"))
+							XposedBridge.log("CRT patch could not be applied");
+					} else if (libsurfaceflingerMD5.equals("7ab85f469baa14ed33ae57967cd16729")) {
+						XposedBridge.log("CRT patch not necessary, library is already patched");
+					} else {
+						XposedBridge.log("CRT patch could not be applied because libsurfaceflinger.so has unknown MD5 sum " + libsurfaceflingerMD5);
+					}
+				}
 			}
 		} catch (Exception e) { XposedBridge.log(e); }
 		
@@ -153,8 +173,9 @@ public class XposedTweakbox {
 	@SuppressWarnings("unused")
 	private static Object handleSignalStrengthGetLevel(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
 		Integer result = (Integer) XposedBridge.callNext(iterator, method, thisObject, args);
+		
 		// value was overridden by our more specific method already
-		if (result > 10000)
+		if (result >= 10000)
 			return result - 10000;
 		
 		// interpolate for other modes
@@ -174,6 +195,7 @@ public class XposedTweakbox {
 			else if (result == 1) return 2;
 		}
 		// shouldn't get here
+		XposedBridge.log("could not determine signal level (original result was " + result);
 		return 0;
 	}
 	

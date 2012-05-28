@@ -65,6 +65,12 @@
             android:summary="When turning off the screen, make it collapse like an old TV"
             android:title="CRT off effect" />
         <CheckBoxPreference
+            android:defaultValue="false"
+            android:dependency="crt_off_effect"
+            android:key="crt_off_library_fix"
+            android:summary="Try to patch libsurfaceflinger.so to avoid screenflicker. Fix by Tungstwenty, so far working for all Samsung ROMs and derivates."
+            android:title="Patch libsurfaceflinger.so" />
+        <CheckBoxPreference
             android:defaultValue="true"
             android:key="unplug_turns_screen_on"
             android:summary="Turn the screen on when you unplug your devices from AC/USB"
@@ -90,7 +96,7 @@
             android:key="volume_keys_skip_track_screenon"
             android:summaryOff="The previous option is only active when the screen is turned off"
             android:summaryOn="The previous option is active independently from the screen state"
-            android:title="... also when screen is turned on" />
+            android:title="... also when screen is turned on" />
         -->
     </PreferenceScreen>
 
