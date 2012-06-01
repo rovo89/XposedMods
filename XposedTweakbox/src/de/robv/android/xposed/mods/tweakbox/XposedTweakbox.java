@@ -3,11 +3,13 @@ package de.robv.android.xposed.mods.tweakbox;
 import static de.robv.android.xposed.XposedHelpers.assetAsByteArray;
 import static de.robv.android.xposed.XposedHelpers.getMD5Sum;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
+import static de.robv.android.xposed.XposedHelpers.setStaticObjectField;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Iterator;
+import java.util.Locale;
 
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
@@ -97,8 +99,9 @@ public class XposedTweakbox {
 	
 	@SuppressWarnings("unused")
 	private static void handleLoadPackage(String packageName, ClassLoader classLoader) {
+		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		
 		if (packageName.equals("com.android.systemui")) {
-			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 			
 			if (!pref.getBoolean("battery_full_notification", true)) {
 				try {
@@ -129,6 +132,10 @@ public class XposedTweakbox {
 				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
+		
+		Locale packageLocale = getPackageSpecificLocale(packageName);
+		if (packageLocale != null)
+			setStaticObjectField(Locale.class, "defaultLocale", packageLocale);
 	}
 	
 	@SuppressWarnings("unused")
@@ -234,6 +241,7 @@ public class XposedTweakbox {
 	private static Object handleDisplayInit(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
 		Object result = XposedBridge.callNext(iterator, method, thisObject, args);
 		try {
+			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 			String packageName = AndroidAppHelper.currentPackageName();
 			
 			int packageDensity = pref.getInt("dpioverride/" + packageName + "/density", pref.getInt("dpioverride/default/density", 0));
@@ -246,9 +254,22 @@ public class XposedTweakbox {
 		return result;
 	}
 	
+	private static Locale getPackageSpecificLocale(String packageName) {
+		String locale = pref.getString("dpioverride/" + packageName + "/locale", pref.getString("dpioverride/default/locale", null));
+		if (locale == null || locale.isEmpty())
+			return null;
+		
+		String[] localeParts = locale.split("_", 3);
+		String language = localeParts[0];
+		String region = (localeParts.length >= 2) ? localeParts[1] : "";
+		String variant = (localeParts.length >= 3) ? localeParts[2] : "";
+		return new Locale(language, region, variant);
+	}
+	
 	@SuppressWarnings("unused")
 	private static Object handleUpdateConfiguration(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
 		try {
+			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 			String packageName = AndroidAppHelper.currentPackageName();
 			Configuration config = (Configuration) args[0];
 			
@@ -264,6 +285,9 @@ public class XposedTweakbox {
 			if (hdp > 0)
 				config.screenHeightDp = hdp;
 			
+			Locale packageLocale = getPackageSpecificLocale(packageName);
+			if (packageLocale != null && !packageLocale.equals(config.locale));
+				config.locale = packageLocale;
 		} catch (Exception e) {
 			XposedBridge.log(e);
 		}
