@@ -1,15 +1,17 @@
 package de.robv.android.xposed.mods.tweakbox;
 
 import static de.robv.android.xposed.XposedHelpers.assetAsByteArray;
+import static de.robv.android.xposed.XposedHelpers.getIntField;
 import static de.robv.android.xposed.XposedHelpers.getMD5Sum;
+import static de.robv.android.xposed.XposedHelpers.getSurroundingThis;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
-import static de.robv.android.xposed.XposedHelpers.setStaticObjectField;
+import static de.robv.android.xposed.XposedHelpers.setIntField;
 
-import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.Observable;
 
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
@@ -36,6 +38,8 @@ public class XposedTweakbox {
 	public static final String MY_PACKAGE_NAME = "de.robv.android.xposed.mods.tweakbox";
 	private static SharedPreferences pref;
 	private static int signalStrengthBars = 4;
+	private static final int ANIM_SETTING_ON = 0x01;
+	private static final int ANIM_SETTING_OFF = 0x10;
 	
 	public static void init(String startClassName) throws Exception {
 		if (startClassName != null)
@@ -43,23 +47,25 @@ public class XposedTweakbox {
 		
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
 		Resources tweakboxRes = XModuleResources.createInstance(MODULE_PATH, null);
-		
+
 		try {
-			if (pref.getBoolean("crt_off_effect", false)) {
-				XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
+			// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
+			XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
+			Class<?> classSettingsObserver = Class.forName("com.android.server.PowerManagerService$SettingsObserver");
+			Method methodUpdate = classSettingsObserver.getDeclaredMethod("update", Observable.class, Object.class);
+			XposedBridge.hookMethod(methodUpdate, XposedTweakbox.class, "handleCrtOffOn", Callback.PRIORITY_DEFAULT);
 				
-				if (pref.getBoolean("crt_off_library_fix", false)) {
-					// apply CRT off fix by Tungstwenty
-					String libsurfaceflingerMD5 = getMD5Sum(new File("/system/lib/libsurfaceflinger.so"));
-					if (libsurfaceflingerMD5.equals("d506192d5049a4042fb84c0265edfe42")) {
-						byte[] crtPatch = assetAsByteArray(tweakboxRes, "crtfix_samsung_d506192d5049a4042fb84c0265edfe42.bsdiff");
-						if (!XposedBridge.patchNativeLibrary("/system/lib/libsurfaceflinger.so", crtPatch, "/system/bin/surfaceflinger"))
-							XposedBridge.log("CRT patch could not be applied");
-					} else if (libsurfaceflingerMD5.equals("7ab85f469baa14ed33ae57967cd16729")) {
-						XposedBridge.log("CRT patch not necessary, library is already patched");
-					} else {
-						XposedBridge.log("CRT patch could not be applied because libsurfaceflinger.so has unknown MD5 sum " + libsurfaceflingerMD5);
-					}
+			if (pref.getBoolean("crt_off_effect", false) || pref.getBoolean("crt_on_effect", false)) {
+				// apply CRT off fix by Tungstwenty plus CRT on effect
+				String libsurfaceflingerMD5 = getMD5Sum("/system/lib/libsurfaceflinger.so");
+				if (libsurfaceflingerMD5.equals("d506192d5049a4042fb84c0265edfe42")) {
+					byte[] crtPatch = assetAsByteArray(tweakboxRes, "crtfix_samsung_d506192d5049a4042fb84c0265edfe42.bsdiff");
+					if (!XposedBridge.patchNativeLibrary("/system/lib/libsurfaceflinger.so", crtPatch, "/system/bin/surfaceflinger"))
+						XposedBridge.log("CRT patch could not be applied");
+				} else if (libsurfaceflingerMD5.equals("3262c644b7b7079958db82bd992f2a46")) {
+					XposedBridge.log("CRT patch not necessary, library is already patched");
+				} else {
+					XposedBridge.log("CRT patch could not be applied because libsurfaceflinger.so has unknown MD5 sum " + libsurfaceflingerMD5);
 				}
 			}
 		} catch (Exception e) { XposedBridge.log(e); }
@@ -80,7 +86,8 @@ public class XposedTweakbox {
 			XResources.setSystemWideReplacement("android", "integer", "config_lowBatteryCloseWarningLevel", pref.getInt("low_battery_close", 20));
 		} catch (Exception e) { XposedBridge.log(e); }
 		
-		try {			
+		// density / resource configuration manipulation
+		try {
 			Method displayInit = Display.class.getDeclaredMethod("init", int.class);
 			XposedBridge.hookMethod(displayInit, XposedTweakbox.class, "handleDisplayInit", Callback.PRIORITY_DEFAULT);
 			
@@ -98,8 +105,12 @@ public class XposedTweakbox {
 	}
 	
 	@SuppressWarnings("unused")
-	private static void handleLoadPackage(String packageName, ClassLoader classLoader) {
+	private static void handleLoadPackage(String packageName, ClassLoader classLoader) throws Exception {
 		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		
+		Locale packageLocale = getPackageSpecificLocale(packageName);
+		if (packageLocale != null)
+			Locale.setDefault(packageLocale);
 		
 		if (packageName.equals("com.android.systemui")) {
 			
@@ -132,17 +143,12 @@ public class XposedTweakbox {
 				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
-		
-		Locale packageLocale = getPackageSpecificLocale(packageName);
-		if (packageLocale != null)
-			setStaticObjectField(Locale.class, "defaultLocale", packageLocale);
 	}
 	
 	@SuppressWarnings("unused")
 	private static void handleInitPackageResources(String packageName, XResources res) {
+		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 		if (packageName.equals("com.android.systemui")) {
-			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-			
 			try {
 				signalStrengthBars = pref.getInt("num_signal_bars", 4);
 				res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator",
@@ -269,25 +275,41 @@ public class XposedTweakbox {
 	@SuppressWarnings("unused")
 	private static Object handleUpdateConfiguration(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
 		try {
-			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-			String packageName = AndroidAppHelper.currentPackageName();
 			Configuration config = (Configuration) args[0];
-			
-			int swdp = pref.getInt("dpioverride/" + packageName + "/swdp", pref.getInt("dpioverride/default/swdp", 0));
-			if (swdp > 0)
-				config.smallestScreenWidthDp = swdp;
-			
-			int wdp = pref.getInt("dpioverride/" + packageName + "/wdp", pref.getInt("dpioverride/default/wdp", 0));
-			if (wdp > 0)
-				config.screenWidthDp = wdp;
-			
-			int hdp = pref.getInt("dpioverride/" + packageName + "/hdp", pref.getInt("dpioverride/default/hdp", 0));
-			if (hdp > 0)
-				config.screenHeightDp = hdp;
-			
-			Locale packageLocale = getPackageSpecificLocale(packageName);
-			if (packageLocale != null && !packageLocale.equals(config.locale));
-				config.locale = packageLocale;
+			if (config != null && thisObject instanceof XResources) {
+				String packageName = ((XResources) thisObject).getPackageName();
+				if (packageName != null) {
+					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+					
+					int swdp = pref.getInt("dpioverride/" + packageName + "/swdp", pref.getInt("dpioverride/default/swdp", 0));
+					int wdp = pref.getInt("dpioverride/" + packageName + "/wdp", pref.getInt("dpioverride/default/wdp", 0));
+					int hdp = pref.getInt("dpioverride/" + packageName + "/hdp", pref.getInt("dpioverride/default/hdp", 0));
+					Locale packageLocale = getPackageSpecificLocale(packageName);
+					
+					if (swdp > 0 || wdp > 0 || hdp > 0 || packageLocale != null) {
+						Configuration newConfig = new Configuration(config);
+						if (swdp > 0)
+							newConfig.smallestScreenWidthDp = swdp;
+						
+						if (wdp > 0)
+							newConfig.screenWidthDp = wdp;
+						
+						if (hdp > 0)
+							newConfig.screenHeightDp = hdp;
+						
+						if (packageLocale != null) {
+							newConfig.locale = packageLocale;
+							// AndroidAppHelper.currentPackageName() is the package name of the current process,
+							// in contrast to the package name for these settings (that might be loaded by a different
+							// process as well)
+							if (AndroidAppHelper.currentPackageName().equals(packageName))
+								Locale.setDefault(packageLocale);
+						}
+						
+						args[0] = newConfig;
+					}
+				}
+			}
 		} catch (Exception e) {
 			XposedBridge.log(e);
 		}
@@ -302,5 +324,20 @@ public class XposedTweakbox {
 				clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
 			} catch (Exception e) { XposedBridge.log(e); }
 		}
+	}
+	
+	@SuppressWarnings("unused")
+	private static Object handleCrtOffOn(Iterator<Callback> iterator, Method method, Object thisObject, Object[] args) throws Throwable {
+		Object result = XposedBridge.callNext(iterator, method, thisObject, args); 
+		try {
+			Object powerManagerService = getSurroundingThis(thisObject);
+			int mAnimationSetting = getIntField(powerManagerService, "mAnimationSetting");
+			if (mAnimationSetting != 0) {
+				mAnimationSetting  = (pref.getBoolean("crt_off_effect", false)) ? ANIM_SETTING_OFF : 0;
+				mAnimationSetting |= (pref.getBoolean("crt_on_effect", false))  ? ANIM_SETTING_ON  : 0;
+				setIntField(powerManagerService, "mAnimationSetting", mAnimationSetting);
+			}
+		} catch (Throwable t) { XposedBridge.log(t); }
+		return result;
 	}
 }
