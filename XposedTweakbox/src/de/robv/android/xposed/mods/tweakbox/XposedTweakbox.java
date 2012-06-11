@@ -26,11 +26,12 @@ import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
+import de.robv.android.xposed.MethodHookXCallback;
+import de.robv.android.xposed.MethodReplacementHookXCallback;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.InitPackageResourcesXCallback;
 import de.robv.android.xposed.callbacks.LayoutInflatedXCallback;
 import de.robv.android.xposed.callbacks.LoadPackageXCallback;
-import de.robv.android.xposed.callbacks.MethodHookXCallback;
 import de.robv.android.xposed.callbacks.XCallback;
 
 
@@ -87,6 +88,10 @@ public class XposedTweakbox {
 				XResources.setSystemWideReplacement("android", "bool", "config_unplugTurnsOnScreen", false);
 			}
 		} catch (Exception e) { XposedBridge.log(e); }
+		
+		XResources.setSystemWideReplacement("android", "bool", "show_ongoing_ime_switcher", false);
+		XResources.setSystemWideReplacement("android", "bool", "config_built_in_sip_phone", true);
+		XResources.setSystemWideReplacement("android", "bool", "config_sip_wifi_only", false);
 		
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_longPressOnHomeBehavior", pref.getInt("long_home_press_behaviour", 2));
@@ -179,7 +184,7 @@ public class XposedTweakbox {
 					try {
 						Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, lpparam.classLoader);
 						Method methodNotifyFullBatteryNotification = classPowerUI.getDeclaredMethod("notifyFullBatteryNotification");
-						XposedBridge.hookMethod(methodNotifyFullBatteryNotification, MethodHookXCallback.DO_NOTHING);
+						XposedBridge.hookMethod(methodNotifyFullBatteryNotification, MethodReplacementHookXCallback.DO_NOTHING);
 					} catch (NoSuchMethodException ignored) {
 					} catch (Exception e) {
 						XposedBridge.log(e);
@@ -205,6 +210,9 @@ public class XposedTweakbox {
 						// correction for signal strength level
 						Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
 						XposedBridge.hookMethod(methodGetLevel, new MethodHookXCallback() {
+							protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+								param.setResult(getCorrectedLevel((Integer) param.getResult()));
+							}
 							private int getCorrectedLevel(int level) {
 								// value was overridden by our more specific method already
 								if (level >= 10000)
@@ -230,16 +238,16 @@ public class XposedTweakbox {
 								XposedBridge.log("could not determine signal level (original result was " + level + ")");
 								return 0;
 							}
-							
-							protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-								param.result = getCorrectedLevel((Integer) param.result);
-							};
 						});
 						
 						Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
 						XposedBridge.hookMethod(methodGsmGetLevel, new MethodHookXCallback() {
-							public Object handleHookedMethod(MethodHookParam param) throws Throwable {
+							@Override
+							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 								int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
+								param.setResult(getSignalLevel(asu));
+							}
+							private int getSignalLevel(int asu) {
 								switch (signalStrengthBars) {
 									case 6:
 								        if (asu <= 1 || asu == 99) return 10000;
@@ -270,6 +278,17 @@ public class XposedTweakbox {
 						});
 					} catch (Exception e) { XposedBridge.log(e); }
 				}
+			} else if (lpparam.packageName.equals("com.android.vending")) {
+				try {
+					Class<?> classDeviceConfigurationProto
+						= Class.forName("com.google.android.vending.remoting.protos.DeviceConfigurationProto", false, lpparam.classLoader);
+					XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new MethodReplacementHookXCallback() {
+						@Override
+						protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+							return 240;
+						}
+					});
+				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
 	};

@@ -13,8 +13,8 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.ViewConfiguration;
+import de.robv.android.xposed.MethodHookXCallback;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.MethodHookXCallback;
 import de.robv.android.xposed.callbacks.XCallback;
 
 // ported from https://github.com/CyanogenMod/android_frameworks_base/commit/fa0c6a58a44fd884d758d47eaa750c9c6476af1a
@@ -46,14 +46,12 @@ public class VolumeKeysSkipTrack {
 					if (event.getAction() == KeyEvent.ACTION_DOWN) {
 						mIsLongPress = false;
 						handleVolumeLongPress(param.thisObject, keyCode);
-						param.result = 0;
-						param.returnEarly = true;
+						param.setResult(0);
 						return;
 					} else {
 						handleVolumeLongPressAbort(param.thisObject);
 						if (mIsLongPress) {
-							param.result = 0;
-							param.returnEarly = true;
+							param.setResult(0);
 							return;
 						}
 						
