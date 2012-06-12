@@ -13,7 +13,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.ViewConfiguration;
-import de.robv.android.xposed.MethodHookXCallback;
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XCallback;
 
@@ -35,7 +35,8 @@ public class VolumeKeysSkipTrack {
 		} catch (Exception e) { XposedBridge.log(e); }
 	}
 	
-	private static MethodHookXCallback handleInterceptKeyBeforeQueueing = new MethodHookXCallback(XCallback.PRIORITY_HIGHEST) {
+	private static XC_MethodHook handleInterceptKeyBeforeQueueing = new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
+		@Override
 		protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 			final boolean isScreenOn = (Boolean) param.args[2];
 			if (!isScreenOn || alsoForScreenOn) {
@@ -68,13 +69,15 @@ public class VolumeKeysSkipTrack {
 		}
 	};
 	
-	private static MethodHookXCallback handleConstructPhoneWindowManager = new MethodHookXCallback() {
+	private static XC_MethodHook handleConstructPhoneWindowManager = new XC_MethodHook() {
+		@Override
 		protected void afterHookedMethod(final MethodHookParam param) throws Throwable {
 			/**
 			 * When a volumeup-key longpress expires, skip songs based on key press
 			 */
 			Runnable mVolumeUpLongPress = new Runnable() {
-			    public void run() {
+			    @Override
+				public void run() {
 			        // set the long press flag to true
 			        mIsLongPress = true;
 
@@ -87,7 +90,8 @@ public class VolumeKeysSkipTrack {
 			 * When a volumedown-key longpress expires, skip songs based on key press
 			 */
 			Runnable mVolumeDownLongPress = new Runnable() {
-			    public void run() {
+			    @Override
+				public void run() {
 			        // set the long press flag to true
 			        mIsLongPress = true;
 

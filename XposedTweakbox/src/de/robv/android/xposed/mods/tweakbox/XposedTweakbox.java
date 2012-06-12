@@ -26,12 +26,12 @@ import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
-import de.robv.android.xposed.MethodHookXCallback;
-import de.robv.android.xposed.MethodReplacementHookXCallback;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.InitPackageResourcesXCallback;
-import de.robv.android.xposed.callbacks.LayoutInflatedXCallback;
-import de.robv.android.xposed.callbacks.LoadPackageXCallback;
+import de.robv.android.xposed.callbacks.XC_InitPackageResources;
+import de.robv.android.xposed.callbacks.XC_LayoutInflated;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import de.robv.android.xposed.callbacks.XCallback;
 
 
@@ -55,7 +55,7 @@ public class XposedTweakbox {
 			XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
 			Class<?> classSettingsObserver = Class.forName("com.android.server.PowerManagerService$SettingsObserver");
 			Method methodUpdate = classSettingsObserver.getDeclaredMethod("update", Observable.class, Object.class);
-			XposedBridge.hookMethod(methodUpdate, new MethodHookXCallback() {
+			XposedBridge.hookMethod(methodUpdate, new XC_MethodHook() {
 				@Override
 				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 					Object powerManagerService = getSurroundingThis(param.thisObject);
@@ -106,7 +106,8 @@ public class XposedTweakbox {
 		// density / resource configuration manipulation
 		try {
 			Method displayInit = Display.class.getDeclaredMethod("init", int.class);
-			XposedBridge.hookMethod(displayInit, new MethodHookXCallback() {
+			XposedBridge.hookMethod(displayInit, new XC_MethodHook() {
+				@Override
 				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 					String packageName = AndroidAppHelper.currentPackageName();
@@ -121,7 +122,7 @@ public class XposedTweakbox {
 			Class<?> classCompatibilityInfo = Class.forName("android.content.res.CompatibilityInfo");
 			Method methodUpdateConfiguration = Resources.class.getDeclaredMethod("updateConfiguration",
 					Configuration.class, DisplayMetrics.class, classCompatibilityInfo);
-			XposedBridge.hookMethod(methodUpdateConfiguration, new MethodHookXCallback() {
+			XposedBridge.hookMethod(methodUpdateConfiguration, new XC_MethodHook() {
 				@Override
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					Configuration config = (Configuration) param.args[0];
@@ -170,7 +171,7 @@ public class XposedTweakbox {
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
 	}
 	
-	private static final LoadPackageXCallback handleLoadPackage = new LoadPackageXCallback() {
+	private static final XC_LoadPackage handleLoadPackage = new XC_LoadPackage() {
 		@Override
 		public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
@@ -184,7 +185,7 @@ public class XposedTweakbox {
 					try {
 						Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, lpparam.classLoader);
 						Method methodNotifyFullBatteryNotification = classPowerUI.getDeclaredMethod("notifyFullBatteryNotification");
-						XposedBridge.hookMethod(methodNotifyFullBatteryNotification, MethodReplacementHookXCallback.DO_NOTHING);
+						XposedBridge.hookMethod(methodNotifyFullBatteryNotification, XC_MethodReplacement.DO_NOTHING);
 					} catch (NoSuchMethodException ignored) {
 					} catch (Exception e) {
 						XposedBridge.log(e);
@@ -195,7 +196,7 @@ public class XposedTweakbox {
 					// http://forum.xda-developers.com/showthread.php?t=1523703
 					try {
 						Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class);
-						XposedBridge.hookMethod(constructLayoutParams, new MethodHookXCallback(XCallback.PRIORITY_HIGHEST) {
+						XposedBridge.hookMethod(constructLayoutParams, new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
 							@Override
 							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 								if ((Integer)param.args[4] == PixelFormat.RGB_565)
@@ -209,7 +210,8 @@ public class XposedTweakbox {
 					try {
 						// correction for signal strength level
 						Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
-						XposedBridge.hookMethod(methodGetLevel, new MethodHookXCallback() {
+						XposedBridge.hookMethod(methodGetLevel, new XC_MethodHook() {
+							@Override
 							protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 								param.setResult(getCorrectedLevel((Integer) param.getResult()));
 							}
@@ -241,7 +243,7 @@ public class XposedTweakbox {
 						});
 						
 						Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
-						XposedBridge.hookMethod(methodGsmGetLevel, new MethodHookXCallback() {
+						XposedBridge.hookMethod(methodGsmGetLevel, new XC_MethodHook() {
 							@Override
 							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 								int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
@@ -282,7 +284,7 @@ public class XposedTweakbox {
 				try {
 					Class<?> classDeviceConfigurationProto
 						= Class.forName("com.google.android.vending.remoting.protos.DeviceConfigurationProto", false, lpparam.classLoader);
-					XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new MethodReplacementHookXCallback() {
+					XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new XC_MethodReplacement() {
 						@Override
 						protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
 							return 240;
@@ -293,7 +295,8 @@ public class XposedTweakbox {
 		}
 	};
 	
-	private static InitPackageResourcesXCallback handleInitPackageResources = new InitPackageResourcesXCallback() {
+	private static XC_InitPackageResources handleInitPackageResources = new XC_InitPackageResources() {
+		@Override
 		public void handleInitPackageResources(InitPackageResourcesParam resparam) throws Throwable {
 			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 			if (resparam.packageName.equals("com.android.systemui")) {
@@ -312,7 +315,7 @@ public class XposedTweakbox {
 				
 				if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
 					try {
-						resparam.res.hookLayout("com.android.systemui", "layout", "tw_status_bar", new LayoutInflatedXCallback() {
+						resparam.res.hookLayout("com.android.systemui", "layout", "tw_status_bar", new XC_LayoutInflated() {
 							@Override
 							public void handleLayoutInflated(LayoutInflatedParam liparam) throws Throwable {
 								try {
