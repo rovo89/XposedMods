@@ -26,16 +26,19 @@ import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
+import de.robv.android.xposed.IXposedHookInitPackageResources;
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.XC_InitPackageResources;
+import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
 import de.robv.android.xposed.callbacks.XC_LayoutInflated;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import de.robv.android.xposed.callbacks.XCallback;
 
 
-public class XposedTweakbox {
+public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPackageResources, IXposedHookLoadPackage {
 	private static final String MODULE_PATH = null; // injected by XposedBridge
 	public static final String MY_PACKAGE_NAME = XposedTweakbox.class.getPackage().getName();
 	private static SharedPreferences pref;
@@ -43,10 +46,8 @@ public class XposedTweakbox {
 	private static final int ANIM_SETTING_ON = 0x01;
 	private static final int ANIM_SETTING_OFF = 0x10;
 	
-	public static void init(String startClassName) throws Exception {
-		if (startClassName != null)
-			return;
-		
+	@Override
+	public void initZygote() {
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
 		Resources tweakboxRes = XModuleResources.createInstance(MODULE_PATH, null);
 
@@ -164,172 +165,165 @@ public class XposedTweakbox {
 			});
 		} catch (Exception e) { XposedBridge.log(e); }
 		
-		XposedBridge.hookLoadPackage(handleLoadPackage);
-		XposedBridge.hookInitPackageResources(handleInitPackageResources);
-		
 		if (pref.getBoolean("volume_keys_skip_track", false))
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
 	}
-	
-	private static final XC_LoadPackage handleLoadPackage = new XC_LoadPackage() {
-		@Override
-		public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-			
-			Locale packageLocale = getPackageSpecificLocale(lpparam.packageName);
-			if (packageLocale != null)
-				Locale.setDefault(packageLocale);
-			
-			if (lpparam.packageName.equals("com.android.systemui")) {
-				if (!pref.getBoolean("battery_full_notification", true)) {
-					try {
-						Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, lpparam.classLoader);
-						Method methodNotifyFullBatteryNotification = classPowerUI.getDeclaredMethod("notifyFullBatteryNotification");
-						XposedBridge.hookMethod(methodNotifyFullBatteryNotification, XC_MethodReplacement.DO_NOTHING);
-					} catch (NoSuchMethodException ignored) {
-					} catch (Exception e) {
-						XposedBridge.log(e);
-					}
-				}
-				
-				if (pref.getBoolean("statusbar_color_enabled", false)) {
-					// http://forum.xda-developers.com/showthread.php?t=1523703
-					try {
-						Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class);
-						XposedBridge.hookMethod(constructLayoutParams, new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
-							@Override
-							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-								if ((Integer)param.args[4] == PixelFormat.RGB_565)
-									param.args[4] = PixelFormat.TRANSLUCENT;
-							}
-						});
-					} catch (Exception e) {	XposedBridge.log(e); }
-				}
-				
-				if (pref.getInt("num_signal_bars", 4) > 4) {
-					try {
-						// correction for signal strength level
-						Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
-						XposedBridge.hookMethod(methodGetLevel, new XC_MethodHook() {
-							@Override
-							protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-								param.setResult(getCorrectedLevel((Integer) param.getResult()));
-							}
-							private int getCorrectedLevel(int level) {
-								// value was overridden by our more specific method already
-								if (level >= 10000)
-									return level - 10000;
-								
-								// interpolate for other modes
-								if (signalStrengthBars == 4 || level == 0) {
-									return level;
-									
-								} else if (signalStrengthBars == 5) {
-									if (level == 4) return 5;
-									else if (level == 3) return 4;
-									else if (level == 2) return 3;
-									else if (level == 1) return 2;
-									
-								} else if (signalStrengthBars == 6) {
-									if (level == 4) return 6;
-									else if (level == 3) return 4;
-									else if (level == 2) return 3;
-									else if (level == 1) return 2;
-								}
-								// shouldn't get here
-								XposedBridge.log("could not determine signal level (original result was " + level + ")");
-								return 0;
-							}
-						});
-						
-						Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
-						XposedBridge.hookMethod(methodGsmGetLevel, new XC_MethodHook() {
-							@Override
-							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-								int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
-								param.setResult(getSignalLevel(asu));
-							}
-							private int getSignalLevel(int asu) {
-								switch (signalStrengthBars) {
-									case 6:
-								        if (asu <= 1 || asu == 99) return 10000;
-								        else if (asu >= 12) return 10006;
-								        else if (asu >= 10) return 10005;
-								        else if (asu >= 8)  return 10004;
-								        else if (asu >= 6)  return 10003;
-								        else if (asu >= 4)  return 10002;
-								        else return 10001;
-								        
-									case 5:
-								        if (asu <= 1 || asu == 99) return 10000;
-								        else if (asu >= 12) return 10005;
-								        else if (asu >= 10) return 10004;
-								        else if (asu >= 7)  return 10003;
-								        else if (asu >= 4)  return 10002;
-								        else return 10001;
-								
-									default:
-										// original implementation (well, kind of. should not be needed anyway)
-								        if (asu <= 2 || asu == 99) return 10000;
-								        else if (asu >= 12) return 10004;
-								        else if (asu >= 8)  return 10003;
-								        else if (asu >= 5)  return 10002;
-								        else return 10001;
-								}
-							};
-						});
-					} catch (Exception e) { XposedBridge.log(e); }
-				}
-			} else if (lpparam.packageName.equals("com.android.vending")) {
+
+	@Override
+	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
+		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		
+		Locale packageLocale = getPackageSpecificLocale(lpparam.packageName);
+		if (packageLocale != null)
+			Locale.setDefault(packageLocale);
+		
+		if (lpparam.packageName.equals("com.android.systemui")) {
+			if (!pref.getBoolean("battery_full_notification", true)) {
 				try {
-					Class<?> classDeviceConfigurationProto
-						= Class.forName("com.google.android.vending.remoting.protos.DeviceConfigurationProto", false, lpparam.classLoader);
-					XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new XC_MethodReplacement() {
+					Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, lpparam.classLoader);
+					Method methodNotifyFullBatteryNotification = classPowerUI.getDeclaredMethod("notifyFullBatteryNotification");
+					XposedBridge.hookMethod(methodNotifyFullBatteryNotification, XC_MethodReplacement.DO_NOTHING);
+				} catch (NoSuchMethodException ignored) {
+				} catch (Exception e) {
+					XposedBridge.log(e);
+				}
+			}
+			
+			if (pref.getBoolean("statusbar_color_enabled", false)) {
+				// http://forum.xda-developers.com/showthread.php?t=1523703
+				try {
+					Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class);
+					XposedBridge.hookMethod(constructLayoutParams, new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
 						@Override
-						protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-							return 240;
+						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+							if ((Integer)param.args[4] == PixelFormat.RGB_565)
+								param.args[4] = PixelFormat.TRANSLUCENT;
 						}
+					});
+				} catch (Exception e) {	XposedBridge.log(e); }
+			}
+			
+			if (pref.getInt("num_signal_bars", 4) > 4) {
+				try {
+					// correction for signal strength level
+					Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
+					XposedBridge.hookMethod(methodGetLevel, new XC_MethodHook() {
+						@Override
+						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+							param.setResult(getCorrectedLevel((Integer) param.getResult()));
+						}
+						private int getCorrectedLevel(int level) {
+							// value was overridden by our more specific method already
+							if (level >= 10000)
+								return level - 10000;
+							
+							// interpolate for other modes
+							if (signalStrengthBars == 4 || level == 0) {
+								return level;
+								
+							} else if (signalStrengthBars == 5) {
+								if (level == 4) return 5;
+								else if (level == 3) return 4;
+								else if (level == 2) return 3;
+								else if (level == 1) return 2;
+								
+							} else if (signalStrengthBars == 6) {
+								if (level == 4) return 6;
+								else if (level == 3) return 4;
+								else if (level == 2) return 3;
+								else if (level == 1) return 2;
+							}
+							// shouldn't get here
+							XposedBridge.log("could not determine signal level (original result was " + level + ")");
+							return 0;
+						}
+					});
+					
+					Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
+					XposedBridge.hookMethod(methodGsmGetLevel, new XC_MethodHook() {
+						@Override
+						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+							int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
+							param.setResult(getSignalLevel(asu));
+						}
+						private int getSignalLevel(int asu) {
+							switch (signalStrengthBars) {
+								case 6:
+							        if (asu <= 1 || asu == 99) return 10000;
+							        else if (asu >= 12) return 10006;
+							        else if (asu >= 10) return 10005;
+							        else if (asu >= 8)  return 10004;
+							        else if (asu >= 6)  return 10003;
+							        else if (asu >= 4)  return 10002;
+							        else return 10001;
+							        
+								case 5:
+							        if (asu <= 1 || asu == 99) return 10000;
+							        else if (asu >= 12) return 10005;
+							        else if (asu >= 10) return 10004;
+							        else if (asu >= 7)  return 10003;
+							        else if (asu >= 4)  return 10002;
+							        else return 10001;
+							
+								default:
+									// original implementation (well, kind of. should not be needed anyway)
+							        if (asu <= 2 || asu == 99) return 10000;
+							        else if (asu >= 12) return 10004;
+							        else if (asu >= 8)  return 10003;
+							        else if (asu >= 5)  return 10002;
+							        else return 10001;
+							}
+						};
 					});
 				} catch (Exception e) { XposedBridge.log(e); }
 			}
+		} else if (lpparam.packageName.equals("com.android.vending")) {
+			try {
+				Class<?> classDeviceConfigurationProto
+					= Class.forName("com.google.android.vending.remoting.protos.DeviceConfigurationProto", false, lpparam.classLoader);
+				XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new XC_MethodReplacement() {
+					@Override
+					protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+						return 240;
+					}
+				});
+			} catch (Exception e) { XposedBridge.log(e); }
 		}
-	};
+	}
 	
-	private static XC_InitPackageResources handleInitPackageResources = new XC_InitPackageResources() {
-		@Override
-		public void handleInitPackageResources(InitPackageResourcesParam resparam) throws Throwable {
-			AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-			if (resparam.packageName.equals("com.android.systemui")) {
+	@Override
+	public void handleInitPackageResources(InitPackageResourcesParam resparam) throws Throwable {
+		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		if (resparam.packageName.equals("com.android.systemui")) {
+			try {
+				signalStrengthBars = pref.getInt("num_signal_bars", 4);
+				resparam.res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator",
+						signalStrengthBars);
+			} catch (Exception e) { XposedBridge.log(e); }
+			
+			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				try {
-					signalStrengthBars = pref.getInt("num_signal_bars", 4);
-					resparam.res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator",
-							signalStrengthBars);
+					int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
+					resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
 				} catch (Exception e) { XposedBridge.log(e); }
-				
-				if (pref.getBoolean("statusbar_color_enabled", false)) {
-					try {
-						int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
-						resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
-					} catch (Exception e) { XposedBridge.log(e); }
-				}
-				
-				if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
-					try {
-						resparam.res.hookLayout("com.android.systemui", "layout", "tw_status_bar", new XC_LayoutInflated() {
-							@Override
-							public void handleLayoutInflated(LayoutInflatedParam liparam) throws Throwable {
-								try {
-									TextView clock = (TextView) liparam.view.findViewById(
-											liparam.res.getIdentifier("clock", "id", "com.android.systemui"));
-									clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
-								} catch (Exception e) { XposedBridge.log(e); }
-							}
-						}); 
-					} catch (Exception e) { XposedBridge.log(e); }
-				}
+			}
+			
+			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
+				try {
+					resparam.res.hookLayout("com.android.systemui", "layout", "tw_status_bar", new XC_LayoutInflated() {
+						@Override
+						public void handleLayoutInflated(LayoutInflatedParam liparam) throws Throwable {
+							try {
+								TextView clock = (TextView) liparam.view.findViewById(
+										liparam.res.getIdentifier("clock", "id", "com.android.systemui"));
+								clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
+							} catch (Exception e) { XposedBridge.log(e); }
+						}
+					}); 
+				} catch (Exception e) { XposedBridge.log(e); }
 			}
 		}
-	};
+	}
 	
 	private static Locale getPackageSpecificLocale(String packageName) {
 		String locale = pref.getString("dpioverride/" + packageName + "/locale", pref.getString("dpioverride/default/locale", null));
