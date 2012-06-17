@@ -98,5 +98,13 @@
             android:title="... also when screen is turned on" />
         -->
     </PreferenceScreen>
-
+    <PreferenceScreen
+        android:key="phone"
+        android:title="Phone" >
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="phone_vibrate_waiting"
+            android:summary="Vibrate when establishing a call and the destination is in a conversation. Applied immediately."
+            android:title="Vibrate on Call Wait" />
+    </PreferenceScreen>
 </PreferenceScreen>
