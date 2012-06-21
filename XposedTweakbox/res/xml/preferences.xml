@@ -106,5 +106,10 @@
             android:key="phone_vibrate_waiting"
             android:summary="Vibrate when establishing a call and the destination is in a conversation. Applied immediately."
             android:title="Vibrate on Call Wait" />
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="phone_increasing_ringer"
+            android:summary="Progressively louder volume for incoming call ring sound. Applied immediately."
+            android:title="Increasing Ringer Volume" />
     </PreferenceScreen>
 </PreferenceScreen>

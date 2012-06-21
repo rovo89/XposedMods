@@ -36,7 +36,6 @@ import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XC_MethodHook.MethodHookParam;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
 import de.robv.android.xposed.callbacks.XC_LayoutInflated;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
@@ -336,6 +335,51 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	                        }
 	                    }
 	                });
+	                
+	                
+	                // Handle increasing ringer tone
+	                final ThreadLocal<Object> insideRingerHandler = new ThreadLocal<Object>();
+	                
+	                // Control whether the execution is inside handleMessage or not()
+	                Class<?> classRinger1 = Class.forName("com.android.phone.Ringer$1", false, lpparam.classLoader);
+	                XposedBridge.hookMethod(classRinger1.getMethod("handleMessage", Class.forName("android.os.Message", false, lpparam.classLoader)),
+	                                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.beforeHookedMethod(param);
+                                
+                                insideRingerHandler.set(new Object());
+                            }
+    
+                            @Override
+                            protected void afterHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.afterHookedMethod(param);
+                                
+                                insideRingerHandler.set(null);
+                            }
+	                });
+	                
+	                XposedBridge.hookMethod(Class.forName("android.media.AudioManager", false, lpparam.classLoader)
+	                                            .getMethod("setStreamVolume", int.class, int.class, int.class),
+	                                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.beforeHookedMethod(param);
+                                if (insideRingerHandler.get() != null) {
+                                    // Within execution of handleMessage()
+                                    AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+                                    if (!pref.getBoolean("phone_increasing_ringer", true)) {
+                                        // No increasing ringer; skip changing the ringer volume
+                                        param.setResult(null);
+                                    }
+                                }
+                            }
+                        });
+	                
+	                
 	            } catch (Exception e) { XposedBridge.log(e); }
 		}
 
