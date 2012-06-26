@@ -5,12 +5,15 @@ import static de.robv.android.xposed.XposedHelpers.getSurroundingThis;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 import static de.robv.android.xposed.XposedHelpers.setIntField;
 
+import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Observable;
 
 import android.app.AndroidAppHelper;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -19,6 +22,7 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.os.SystemProperties;
+import android.os.Vibrator;
 import android.telephony.SignalStrength;
 import android.util.DisplayMetrics;
 import android.view.Display;
@@ -284,6 +288,95 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					});
 				} catch (Throwable t) { XposedBridge.log(t); } 
 			}
+		} else if (lpparam.packageName.equals("com.android.phone")) {
+	            try {
+	                Method displaySSInfo = Class.forName("com.android.phone.PhoneUtils", false, lpparam.classLoader).getDeclaredMethod("displaySSInfo",
+	                                                        Class.forName("com.android.internal.telephony.Phone",
+	                                                                      false,
+	                                                                      lpparam.classLoader),
+	                                                        Class.forName("android.content.Context",
+	                                                                      false,
+	                                                                      lpparam.classLoader),
+	                                                        Class.forName("com.android.internal.telephony.gsm.SuppServiceNotification",
+	                                                                      false,
+	                                                                      lpparam.classLoader),
+	                                                        Class.forName("android.os.Message",
+	                                                                      false,
+	                                                                      lpparam.classLoader),
+	                                                        Class.forName("android.app.AlertDialog",
+	                                                                      false,
+	                                                                      lpparam.classLoader));
+	                
+	                Class<?> classSSNotification = Class.forName("com.android.internal.telephony.gsm.SuppServiceNotification",
+	                                                             false,
+	                                                             lpparam.classLoader);
+	                final Field fieldNotificationType = classSSNotification.getDeclaredField("notificationType");
+	                final Field fieldCode = classSSNotification.getDeclaredField("code");
+	                AccessibleObject.setAccessible(new AccessibleObject[] { fieldNotificationType, fieldCode }, true);
+	                
+	                XposedBridge.hookMethod(displaySSInfo, new XC_MethodHook() {
+	                    @Override
+	                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+	                        if (fieldNotificationType.getInt(param.args[2]) == 0) {
+	                            if (fieldCode.getInt(param.args[2]) == 3) { // Waiting for target party
+	                                AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+	                                if (pref.getBoolean("phone_vibrate_waiting", false)) {
+	                                    Context context = (Context) param.args[1];
+
+	                                    // Get instance of Vibrator from current Context
+	                                    Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+	                                    v.vibrate(new long[] { 0, 200, 200, 200, 200, 800 }, -1); // Vibrate with a simple pattern
+	                                }
+	                            }
+	                        }
+	                    }
+	                });
+	                
+	                
+	                // Handle increasing ringer tone
+	                final ThreadLocal<Object> insideRingerHandler = new ThreadLocal<Object>();
+	                
+	                // Control whether the execution is inside handleMessage or not()
+	                Class<?> classRinger1 = Class.forName("com.android.phone.Ringer$1", false, lpparam.classLoader);
+	                XposedBridge.hookMethod(classRinger1.getMethod("handleMessage", Class.forName("android.os.Message", false, lpparam.classLoader)),
+	                                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.beforeHookedMethod(param);
+                                
+                                insideRingerHandler.set(new Object());
+                            }
+    
+                            @Override
+                            protected void afterHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.afterHookedMethod(param);
+                                
+                                insideRingerHandler.set(null);
+                            }
+	                });
+	                
+	                XposedBridge.hookMethod(Class.forName("android.media.AudioManager", false, lpparam.classLoader)
+	                                            .getMethod("setStreamVolume", int.class, int.class, int.class),
+	                                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param)
+                                    throws Throwable {
+                                super.beforeHookedMethod(param);
+                                if (insideRingerHandler.get() != null) {
+                                    // Within execution of handleMessage()
+                                    AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+                                    if (!pref.getBoolean("phone_increasing_ringer", true)) {
+                                        // No increasing ringer; skip changing the ringer volume
+                                        param.setResult(null);
+                                    }
+                                }
+                            }
+                        });
+	                
+	                
+	            } catch (Exception e) { XposedBridge.log(e); }
 		}
 	}
 	
