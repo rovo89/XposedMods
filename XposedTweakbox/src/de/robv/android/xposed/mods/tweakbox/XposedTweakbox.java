@@ -1,8 +1,6 @@
 package de.robv.android.xposed.mods.tweakbox;
 
-import static de.robv.android.xposed.XposedHelpers.assetAsByteArray;
 import static de.robv.android.xposed.XposedHelpers.getIntField;
-import static de.robv.android.xposed.XposedHelpers.getMD5Sum;
 import static de.robv.android.xposed.XposedHelpers.getSurroundingThis;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 import static de.robv.android.xposed.XposedHelpers.setIntField;
@@ -16,11 +14,11 @@ import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.content.res.XModuleResources;
 import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
+import android.os.SystemProperties;
 import android.telephony.SignalStrength;
 import android.util.DisplayMetrics;
 import android.view.Display;
@@ -49,7 +47,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	@Override
 	public void initZygote() {
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
-		Resources tweakboxRes = XModuleResources.createInstance(MODULE_PATH, null);
 
 		try {
 			// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
@@ -68,20 +65,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					} 
 				}
 			});
-				
-			if (pref.getBoolean("crt_off_effect", false) || pref.getBoolean("crt_on_effect", false)) {
-				// apply CRT off fix by Tungstwenty plus CRT on effect
-				String libsurfaceflingerMD5 = getMD5Sum("/system/lib/libsurfaceflinger.so");
-				if (libsurfaceflingerMD5.equals("d506192d5049a4042fb84c0265edfe42")) {
-					byte[] crtPatch = assetAsByteArray(tweakboxRes, "crtfix_samsung_d506192d5049a4042fb84c0265edfe42.bsdiff");
-					if (!XposedBridge.patchNativeLibrary("/system/lib/libsurfaceflinger.so", crtPatch, "/system/bin/surfaceflinger"))
-						XposedBridge.log("CRT patch could not be applied");
-				} else if (libsurfaceflingerMD5.equals("3262c644b7b7079958db82bd992f2a46")) {
-					XposedBridge.log("CRT patch not necessary, library is already patched");
-				} else {
-					XposedBridge.log("CRT patch could not be applied because libsurfaceflinger.so has unknown MD5 sum " + libsurfaceflingerMD5);
-				}
-			}
 		} catch (Exception e) { XposedBridge.log(e); }
 		
 		try {
@@ -288,6 +271,19 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					}
 				});
 			} catch (Exception e) { XposedBridge.log(e); }
+		} else if (lpparam.packageName.equals("android")) {
+			if (pref.getBoolean("crt_off_effect", false) || pref.getBoolean("crt_on_effect", false)) {
+				try {
+					Class<?> classMOL = Class.forName("com.android.internal.policy.impl.PhoneWindowManager$MyOrientationListener", false, lpparam.classLoader);
+					XposedBridge.hookMethod(classMOL.getDeclaredMethod("onProposedRotationChanged", int.class), new XC_MethodHook() {
+						@Override
+						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+							int rotation = (Integer) param.args[0];
+							SystemProperties.set("hw.crt.landscape", String.valueOf(rotation % 2));
+						}
+					});
+				} catch (Throwable t) { XposedBridge.log(t); } 
+			}
 		}
 	}
 	
