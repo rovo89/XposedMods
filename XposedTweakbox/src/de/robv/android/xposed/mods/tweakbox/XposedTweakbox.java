@@ -41,7 +41,6 @@ import de.robv.android.xposed.callbacks.XCallback;
 
 
 public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPackageResources, IXposedHookLoadPackage {
-	private static final String MODULE_PATH = null; // injected by XposedBridge
 	public static final String MY_PACKAGE_NAME = XposedTweakbox.class.getPackage().getName();
 	private static SharedPreferences pref;
 	private static int signalStrengthBars = 4;
@@ -49,7 +48,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	private static final int ANIM_SETTING_OFF = 0x10;
 	
 	@Override
-	public void initZygote() {
+	public void initZygote(StartupParam startupParam) {
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
 
 		try {
