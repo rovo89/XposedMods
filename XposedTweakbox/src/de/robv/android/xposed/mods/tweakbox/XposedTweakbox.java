@@ -34,6 +34,7 @@ import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
 import de.robv.android.xposed.callbacks.XC_LayoutInflated;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
@@ -373,6 +374,35 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
                                 }
                             }
                         });
+	                
+	                
+	                // Handle call recording
+	                if (pref.getBoolean("phone_call_recording", false)) {
+	                	try {
+	                	    Method hasFeature = Class.forName("com.android.phone.PhoneFeature", false,
+	                	    		lpparam.classLoader).getDeclaredMethod("hasFeature", String.class);
+	                	    XposedBridge.hookMethod(hasFeature, new XC_MethodHook() {
+	                	    	@Override
+	                	    	protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+	                	    		if ("voice_call_recording".equals(param.args[0])) {
+	                	    			param.setResult(Boolean.TRUE);
+	                	    		}
+	                	    	}
+	                	    });
+
+	                	    final Class<?> classMediaRecorder = Class.forName("android.media.MediaRecorder", false, lpparam.classLoader);
+	                	    Method prepare = classMediaRecorder.getDeclaredMethod("prepare");
+	                	    XposedBridge.hookMethod(prepare, new XC_MethodHook() {
+	                	    	@Override
+	                	    	protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+	                	    		XposedHelpers.callMethod(param.thisObject, "start");
+	                	    	}
+							});
+
+	                	} catch (Exception e) {
+	                	    XposedBridge.log(e);
+	                	}
+	                }
 	                
 	                
 	            } catch (Exception e) { XposedBridge.log(e); }

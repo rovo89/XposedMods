@@ -111,5 +111,10 @@
             android:key="phone_increasing_ringer"
             android:summary="Progressively louder volume for incoming call ring sound. Applied immediately."
             android:title="Increasing Ringer Volume" />
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="phone_call_recording"
+            android:summary="Enable call recording button while in the middle of a call. Applied after reboot."
+            android:title="Call Recording" />
     </PreferenceScreen>
 </PreferenceScreen>
