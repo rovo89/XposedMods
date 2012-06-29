@@ -282,7 +282,13 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 						int rotation = (Integer) param.args[0];
 						if (rotation >= 0) {
-						    SystemProperties.set("runtime.xposed.orientation", String.valueOf(rotation));
+						    AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+						    if (pref.getBoolean("crt_effect_orientation", false)) {
+						        SystemProperties.set("runtime.xposed.orientation", String.valueOf(rotation));
+						    } else {
+						        // Must always update, otherwise it might become stuck in landscape if turned Off without reboot
+						        SystemProperties.set("runtime.xposed.orientation", "0");
+						    }
 						}
 					}
 				});

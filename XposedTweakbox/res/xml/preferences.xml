@@ -70,6 +70,11 @@
             android:summary="Show an effect similar to the one above, which expands when turning on the screen"
             android:title="CRT on effect" />
         <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="crt_effect_orientation"
+            android:summary="Uses portrait or landscape CRT effect depending on the device orientation. Requires auto-rotation to be active."
+            android:title="CRT effect auto-orientation" />
+        <CheckBoxPreference
             android:defaultValue="true"
             android:key="unplug_turns_screen_on"
             android:summary="Turn the screen on when you unplug your devices from AC/USB"

@@ -2,11 +2,6 @@
 
     <lib
         name="libsurfaceflinger.so"
-        asset="libs/libsurfaceflinger.so_I9100_Stock" >
-		CRT off/on fix for stock-based I9100 ROMs    </lib>
-
-    <lib
-        name="libsurfaceflinger.so"
         asset="libs/libsurfaceflinger.so_I9100_Stock_LS" >
 		CRT off/on fix for stock-based I9100 ROMs (including support for landscape)    </lib>
 
