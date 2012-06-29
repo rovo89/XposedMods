@@ -1,6 +1,5 @@
 package de.robv.android.xposed.mods.tweakbox;
 
-import static de.robv.android.xposed.XposedHelpers.getIntField;
 import static de.robv.android.xposed.XposedHelpers.getSurroundingThis;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 import static de.robv.android.xposed.XposedHelpers.setIntField;
@@ -10,7 +9,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Locale;
-import java.util.Observable;
 
 import android.app.AndroidAppHelper;
 import android.content.Context;
@@ -55,20 +53,21 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		try {
 			// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
 			XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
-			Class<?> classSettingsObserver = Class.forName("com.android.server.PowerManagerService$SettingsObserver");
-			Method methodUpdate = classSettingsObserver.getDeclaredMethod("update", Observable.class, Object.class);
-			XposedBridge.hookMethod(methodUpdate, new XC_MethodHook() {
-				@Override
-				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-					Object powerManagerService = getSurroundingThis(param.thisObject);
-					int mAnimationSetting = getIntField(powerManagerService, "mAnimationSetting");
-					if (mAnimationSetting != 0) {
-						mAnimationSetting  = (pref.getBoolean("crt_off_effect", false)) ? ANIM_SETTING_OFF : 0;
-						mAnimationSetting |= (pref.getBoolean("crt_on_effect", false))  ? ANIM_SETTING_ON  : 0;
-						setIntField(powerManagerService, "mAnimationSetting", mAnimationSetting);
-					} 
-				}
-			});
+			// hook for CRT effects
+			Class<?> classBrightnessState = Class.forName("com.android.server.PowerManagerService$BrightnessState");
+                        Method methodRun = classBrightnessState.getDeclaredMethod("run");
+                        XposedBridge.hookMethod(methodRun, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                // About to turn off screen
+                                AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+                                Object powerManagerService = getSurroundingThis(param.thisObject);
+                                int animationSetting;
+                                animationSetting  = (pref.getBoolean("crt_off_effect", false)) ? ANIM_SETTING_OFF : 0;
+                                animationSetting |= (pref.getBoolean("crt_on_effect", false))  ? ANIM_SETTING_ON  : 0;
+                                setIntField(powerManagerService, "mAnimationSetting", animationSetting);
+                            }
+                        });
 		} catch (Exception e) { XposedBridge.log(e); }
 		
 		try {
@@ -276,18 +275,18 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 				});
 			} catch (Exception e) { XposedBridge.log(e); }
 		} else if (lpparam.packageName.equals("android")) {
-			if (pref.getBoolean("crt_off_effect", false) || pref.getBoolean("crt_on_effect", false)) {
-				try {
-					Class<?> classMOL = Class.forName("com.android.internal.policy.impl.PhoneWindowManager$MyOrientationListener", false, lpparam.classLoader);
-					XposedBridge.hookMethod(classMOL.getDeclaredMethod("onProposedRotationChanged", int.class), new XC_MethodHook() {
-						@Override
-						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-							int rotation = (Integer) param.args[0];
-							SystemProperties.set("hw.crt.landscape", String.valueOf(rotation % 2));
+			try {
+				Class<?> classMOL = Class.forName("com.android.internal.policy.impl.PhoneWindowManager$MyOrientationListener", false, lpparam.classLoader);
+				XposedBridge.hookMethod(classMOL.getDeclaredMethod("onProposedRotationChanged", int.class), new XC_MethodHook() {
+					@Override
+					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+						int rotation = (Integer) param.args[0];
+						if (rotation >= 0) {
+						    SystemProperties.set("runtime.xposed.orientation", String.valueOf(rotation));
 						}
-					});
-				} catch (Throwable t) { XposedBridge.log(t); } 
-			}
+					}
+				});
+			} catch (Throwable t) { XposedBridge.log(t); } 
 		} else if (lpparam.packageName.equals("com.android.phone")) {
 	            try {
 	                Method displaySSInfo = Class.forName("com.android.phone.PhoneUtils", false, lpparam.classLoader).getDeclaredMethod("displaySSInfo",
