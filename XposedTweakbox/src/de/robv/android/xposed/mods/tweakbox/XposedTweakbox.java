@@ -1,28 +1,36 @@
 package de.robv.android.xposed.mods.tweakbox;
 
+import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
+import static de.robv.android.xposed.XposedHelpers.getIntField;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 
-import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Locale;
 
+import android.app.AlertDialog;
 import android.app.AndroidAppHelper;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
+import android.media.AudioManager;
+import android.media.MediaRecorder;
+import android.os.Message;
 import android.os.Vibrator;
 import android.telephony.SignalStrength;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
+
+import com.android.internal.telephony.Phone;
+import com.android.internal.telephony.gsm.SuppServiceNotification;
+
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -37,6 +45,7 @@ import de.robv.android.xposed.callbacks.XCallback;
 
 
 public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPackageResources, IXposedHookLoadPackage {
+	public static final String TAG = "Tweakbox";
 	public static final String MY_PACKAGE_NAME = XposedTweakbox.class.getPackage().getName();
 	private static SharedPreferences pref;
 	private static int signalStrengthBars = 4;
@@ -44,7 +53,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	@Override
 	public void initZygote(StartupParam startupParam) {
 		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
-
+		
 		// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
 		XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
 
@@ -52,7 +61,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			if (!pref.getBoolean("unplug_turns_screen_on", true)) {
 				XResources.setSystemWideReplacement("android", "bool", "config_unplugTurnsOnScreen", false);
 			}
-		} catch (Exception e) { XposedBridge.log(e); }
+		} catch (Throwable t) { XposedBridge.log(t); }
 
 		XResources.setSystemWideReplacement("android", "bool", "show_ongoing_ime_switcher", false);
 		XResources.setSystemWideReplacement("android", "bool", "config_built_in_sip_phone", true);
@@ -60,18 +69,17 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_longPressOnHomeBehavior", pref.getInt("long_home_press_behaviour", 2));
-		} catch (Exception e) { XposedBridge.log(e); }
+		} catch (Throwable t) { XposedBridge.log(t); }
 
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_criticalBatteryWarningLevel", pref.getInt("low_battery_critical", 5));
 			XResources.setSystemWideReplacement("android", "integer", "config_lowBatteryWarningLevel", pref.getInt("low_battery_low", 15));
 			XResources.setSystemWideReplacement("android", "integer", "config_lowBatteryCloseWarningLevel", pref.getInt("low_battery_close", 20));
-		} catch (Exception e) { XposedBridge.log(e); }
+		} catch (Throwable t) { XposedBridge.log(t); }
 
 		// density / resource configuration manipulation
 		try {
-			Method displayInit = Display.class.getDeclaredMethod("init", int.class);
-			XposedBridge.hookMethod(displayInit, new XC_MethodHook() {
+			findAndHookMethod(Display.class, "init", int.class, new XC_MethodHook() {
 				@Override
 				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
@@ -83,11 +91,8 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 				};
 			});
 
-
-			Class<?> classCompatibilityInfo = Class.forName("android.content.res.CompatibilityInfo");
-			Method methodUpdateConfiguration = Resources.class.getDeclaredMethod("updateConfiguration",
-					Configuration.class, DisplayMetrics.class, classCompatibilityInfo);
-			XposedBridge.hookMethod(methodUpdateConfiguration, new XC_MethodHook() {
+			findAndHookMethod(Resources.class, "updateConfiguration",
+					Configuration.class, DisplayMetrics.class, CompatibilityInfo.class, new XC_MethodHook() {
 				@Override
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					Configuration config = (Configuration) param.args[0];
@@ -127,7 +132,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					}
 				}
 			});
-		} catch (Exception e) { XposedBridge.log(e); }
+		} catch (Throwable t) { XposedBridge.log(t); }
 
 		if (pref.getBoolean("volume_keys_skip_track", false))
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
@@ -145,19 +150,16 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		if (lpparam.packageName.equals("com.android.systemui")) {
 			if (!pref.getBoolean("battery_full_notification", true)) {
 				try {
-					Class<?> classPowerUI = Class.forName("com.android.systemui.power.PowerUI", false, lpparam.classLoader);
-					Method methodNotifyFullBatteryNotification = classPowerUI.getDeclaredMethod("notifyFullBatteryNotification");
-					XposedBridge.hookMethod(methodNotifyFullBatteryNotification, XC_MethodReplacement.DO_NOTHING);
-				} catch (NoSuchMethodException ignored) {
-				} catch (Exception e) {
-					XposedBridge.log(e);
-				}
+					findAndHookMethod("com.android.systemui.power.PowerUI", lpparam.classLoader, "notifyFullBatteryNotification",
+							XC_MethodReplacement.DO_NOTHING);
+				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 
 			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				// http://forum.xda-developers.com/showthread.php?t=1523703
 				try {
-					Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class);
+					Constructor<?> constructLayoutParams = WindowManager.LayoutParams.class.getDeclaredConstructor(
+							int.class, int.class, int.class, int.class, int.class);
 					XposedBridge.hookMethod(constructLayoutParams, new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
 						@Override
 						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
@@ -165,14 +167,13 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 								param.args[4] = PixelFormat.TRANSLUCENT;
 						}
 					});
-				} catch (Exception e) { XposedBridge.log(e); }
+				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 
 			if (pref.getInt("num_signal_bars", 4) > 4) {
 				try {
 					// correction for signal strength level
-					Method methodGetLevel = SignalStrength.class.getDeclaredMethod("getLevel");
-					XposedBridge.hookMethod(methodGetLevel, new XC_MethodHook() {
+					findAndHookMethod(SignalStrength.class, "getLevel", new XC_MethodHook() {
 						@Override
 						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 							param.setResult(getCorrectedLevel((Integer) param.getResult()));
@@ -204,8 +205,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 						}
 					});
 
-					Method methodGsmGetLevel = SignalStrength.class.getDeclaredMethod("getGsmLevel");
-					XposedBridge.hookMethod(methodGsmGetLevel, new XC_MethodHook() {
+					findAndHookMethod(SignalStrength.class, "getGsmLevel", new XC_MethodHook() {
 						@Override
 						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 							int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
@@ -240,99 +240,73 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 							}
 						};
 					});
-				} catch (Exception e) { XposedBridge.log(e); }
+				} catch (Throwable t) { XposedBridge.log(t); }
 			}
+			
+			
 		} else if (lpparam.packageName.equals("com.android.vending")) {
 			try {
-				Class<?> classDeviceConfigurationProto
-				= Class.forName("com.google.android.vending.remoting.protos.DeviceConfigurationProto", false, lpparam.classLoader);
-				XposedBridge.hookMethod(classDeviceConfigurationProto.getDeclaredMethod("getScreenDensity"), new XC_MethodReplacement() {
+				findAndHookMethod("com.google.android.vending.remoting.protos.DeviceConfigurationProto", lpparam.classLoader,
+						"getScreenDensity", new XC_MethodReplacement() {
 					@Override
 					protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
 						return 240;
 					}
 				});
-			} catch (Exception e) { XposedBridge.log(e); }
+			} catch (Throwable t) { XposedBridge.log(t); }
+			
+			
 		} else if (lpparam.packageName.equals("android")) {
 			try {
 				CrtEffect.hookScreenOff(pref, lpparam.classLoader);
 			} catch (Throwable t) { XposedBridge.log(t); }
+			
+			
 		} else if (lpparam.packageName.equals("com.android.phone")) {
+			// Handle vibrate on Call Wait
 			try {
-				Method displaySSInfo = Class.forName("com.android.phone.PhoneUtils", false, lpparam.classLoader).getDeclaredMethod("displaySSInfo",
-						Class.forName("com.android.internal.telephony.Phone",
-								false,
-								lpparam.classLoader),
-								Class.forName("android.content.Context",
-										false,
-										lpparam.classLoader),
-										Class.forName("com.android.internal.telephony.gsm.SuppServiceNotification",
-												false,
-												lpparam.classLoader),
-												Class.forName("android.os.Message",
-														false,
-														lpparam.classLoader),
-														Class.forName("android.app.AlertDialog",
-																false,
-																lpparam.classLoader));
-
-				Class<?> classSSNotification = Class.forName("com.android.internal.telephony.gsm.SuppServiceNotification",
-						false,
-						lpparam.classLoader);
-				final Field fieldNotificationType = classSSNotification.getDeclaredField("notificationType");
-				final Field fieldCode = classSSNotification.getDeclaredField("code");
-				AccessibleObject.setAccessible(new AccessibleObject[] { fieldNotificationType, fieldCode }, true);
-
-				XposedBridge.hookMethod(displaySSInfo, new XC_MethodHook() {
+				findAndHookMethod("com.android.phone.PhoneUtils", lpparam.classLoader, "displaySSInfo",
+						Phone.class, Context.class, SuppServiceNotification.class, Message.class, AlertDialog.class, new XC_MethodHook() {
 					@Override
 					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-						if (fieldNotificationType.getInt(param.args[2]) == 0) {
-							if (fieldCode.getInt(param.args[2]) == 3) { // Waiting for target party
-								AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-									if (pref.getBoolean("phone_vibrate_waiting", false)) {
-										Context context = (Context) param.args[1];
-
-										// Get instance of Vibrator from current Context
-										Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-										v.vibrate(new long[] { 0, 200, 200, 200, 200, 800 }, -1); // Vibrate with a simple pattern
-									}
+						int notificationType = getIntField(param.args[2], "notificationType");
+						int code = getIntField(param.args[2], "code");
+						
+						 // Waiting for target party
+						if (notificationType == 0 && code == 3) {
+							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+							if (pref.getBoolean("phone_vibrate_waiting", false)) {
+								Context context = (Context) param.args[1];
+	
+								// Get instance of Vibrator from current Context
+								Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+								v.vibrate(new long[] { 0, 200, 200, 200, 200, 800 }, -1); // Vibrate with a simple pattern
 							}
 						}
 					}
 				});
+			} catch (Throwable t) { XposedBridge.log(t); }
 
-
-				// Handle increasing ringer tone
+			// Handle increasing ringer tone
+			try {
 				final ThreadLocal<Object> insideRingerHandler = new ThreadLocal<Object>();
 
 				// Control whether the execution is inside handleMessage or not()
-				Class<?> classRinger1 = Class.forName("com.android.phone.Ringer$1", false, lpparam.classLoader);
-				XposedBridge.hookMethod(classRinger1.getMethod("handleMessage", Class.forName("android.os.Message", false, lpparam.classLoader)),
-						new XC_MethodHook() {
+				findAndHookMethod("com.android.phone.Ringer$1", lpparam.classLoader, "handleMessage", Message.class, new XC_MethodHook() {
 					@Override
-					protected void beforeHookedMethod(MethodHookParam param)
-							throws Throwable {
-						super.beforeHookedMethod(param);
-
+					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 						insideRingerHandler.set(new Object());
 					}
 
 					@Override
-					protected void afterHookedMethod(MethodHookParam param)
-							throws Throwable {
-						super.afterHookedMethod(param);
-
+					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 						insideRingerHandler.set(null);
 					}
 				});
 
-				XposedBridge.hookMethod(Class.forName("android.media.AudioManager", false, lpparam.classLoader)
-						.getMethod("setStreamVolume", int.class, int.class, int.class),
-						new XC_MethodHook() {
+				findAndHookMethod(AudioManager.class, "setStreamVolume", int.class, int.class, int.class, new XC_MethodHook() {
 					@Override
-					protected void beforeHookedMethod(MethodHookParam param)
-							throws Throwable {
-						super.beforeHookedMethod(param);
+					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 						if (insideRingerHandler.get() != null) {
 							// Within execution of handleMessage()
 							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
@@ -343,56 +317,48 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 						}
 					}
 				});
+			} catch (Throwable t) { XposedBridge.log(t); }
 
 
-				// Handle call recording
-				if (pref.getBoolean("phone_call_recording", false)) {
-					try {
-						Method hasFeature = Class.forName("com.android.phone.PhoneFeature", false,
-								lpparam.classLoader).getDeclaredMethod("hasFeature", String.class);
-						XposedBridge.hookMethod(hasFeature, new XC_MethodHook() {
-							@Override
-							protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-								if ("voice_call_recording".equals(param.args[0])) {
-									param.setResult(Boolean.TRUE);
-								}
+			// Handle call recording
+			if (pref.getBoolean("phone_call_recording", false)) {
+				try {
+					findAndHookMethod("com.android.phone.PhoneFeature", lpparam.classLoader, "hasFeature", String.class, new XC_MethodHook() {
+						@Override
+						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+							if ("voice_call_recording".equals(param.args[0])) {
+								param.setResult(Boolean.TRUE);
 							}
-						});
+						}
+					});
 
-						final Class<?> classMediaRecorder = Class.forName("android.media.MediaRecorder", false, lpparam.classLoader);
-						Method prepare = classMediaRecorder.getDeclaredMethod("prepare");
-						XposedBridge.hookMethod(prepare, new XC_MethodHook() {
-							@Override
-							protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-								XposedHelpers.callMethod(param.thisObject, "start");
-							}
-						});
+					findAndHookMethod(MediaRecorder.class, "prepare", new XC_MethodHook() {
+						@Override
+						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+							XposedHelpers.callMethod(param.thisObject, "start");
+						}
+					});
 
-					} catch (Exception e) {
-						XposedBridge.log(e);
-					}
-				}
-
-
-			} catch (Exception e) { XposedBridge.log(e); }
+				} catch (Throwable t) { XposedBridge.log(t); }
+			}
 		}
 	}
 
 	@Override
 	public void handleInitPackageResources(InitPackageResourcesParam resparam) throws Throwable {
 		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		
 		if (resparam.packageName.equals("com.android.systemui")) {
 			try {
 				signalStrengthBars = pref.getInt("num_signal_bars", 4);
-				resparam.res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator",
-						signalStrengthBars);
-			} catch (Exception e) { XposedBridge.log(e); }
+				resparam.res.setReplacement("com.android.systemui", "integer", "config_maxLevelOfSignalStrengthIndicator", signalStrengthBars);
+			} catch (Throwable t) { XposedBridge.log(t); }
 
 			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				try {
 					int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
 					resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
-				} catch (Exception e) { XposedBridge.log(e); }
+				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 
 			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
@@ -404,10 +370,10 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 								TextView clock = (TextView) liparam.view.findViewById(
 										liparam.res.getIdentifier("clock", "id", "com.android.systemui"));
 								clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
-							} catch (Exception e) { XposedBridge.log(e); }
+							} catch (Throwable t) { XposedBridge.log(t); }
 						}
 					}); 
-				} catch (Exception e) { XposedBridge.log(e); }
+				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 		}
 	}

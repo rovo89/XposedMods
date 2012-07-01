@@ -1,5 +1,8 @@
 package de.robv.android.xposed.mods.tweakbox;
 
+import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
+import static de.robv.android.xposed.XposedHelpers.findClass;
+import static de.robv.android.xposed.XposedHelpers.findMethodExact;
 import static de.robv.android.xposed.XposedHelpers.getIntField;
 import static de.robv.android.xposed.XposedHelpers.getSurroundingThis;
 import static de.robv.android.xposed.XposedHelpers.setIntField;
@@ -42,10 +45,10 @@ public class CrtEffect {
 	public static void hookScreenOff(final SharedPreferences pref, ClassLoader classLoader) throws Exception {
 
 		final ThreadLocal<CallStackState> nestingStatus = new ThreadLocal<CallStackState>();
-
-		Class<?> clsBrightnessState = Class.forName("com.android.server.PowerManagerService$BrightnessState");
-		Method methodRun = clsBrightnessState.getDeclaredMethod("run");
-		XposedBridge.hookMethod(methodRun, new XC_MethodHook() {
+		
+		Class<?> classBrightnessState = findClass("com.android.server.PowerManagerService$BrightnessState", classLoader);
+		
+		findAndHookMethod(classBrightnessState, "run", new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 				// About to turn off screen
@@ -56,35 +59,36 @@ public class CrtEffect {
 				animationSetting |= (pref.getBoolean("crt_on_effect", false))  ? ANIM_SETTING_ON  : 0;
 				setIntField(powerManagerService, "mAnimationSetting", animationSetting);
 
-				Log.i("Tweakbox", "Setting entry on run");
+				Log.d(XposedTweakbox.TAG, "CRT: Setting entry on run");
 				nestingStatus.set(CallStackState.ENTERED_RUN);
 			}
 
 			@Override
 			protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 				nestingStatus.set(null);
-				Log.i("Tweakbox", "Clearing method run on exit");
+				Log.d(XposedTweakbox.TAG, "CRT: Clearing method run on exit");
 			}
 		});
 
-		Class<?> clsPowerManager = Class.forName("com.android.server.PowerManagerService");
-		final Method methodNativeAnimation = clsPowerManager.getDeclaredMethod("nativeStartSurfaceFlingerAnimation", int.class);
+		final Method methodNativeAnimation = findMethodExact("com.android.server.PowerManagerService", classLoader,
+				"nativeStartSurfaceFlingerAnimation", int.class);
 		XposedBridge.hookMethod(methodNativeAnimation, new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-				Log.i("Tweakbox", "Executing the native method");
+				Log.d(XposedTweakbox.TAG, "Executing the native method");
 				if (CallStackState.ENTERED_RUN.equals(nestingStatus.get())) {
-					Log.i("Tweakbox", "Setting status to past native method");
+					Log.d(XposedTweakbox.TAG, "CRT: Setting status to past native method");
 					nestingStatus.set(CallStackState.EXECUTED_NATIVE);
 				}
 			}
 		});
 
-		Method methodJumpTargetLocked = clsBrightnessState.getDeclaredMethod("jumpToTargetLocked");
-		XposedBridge.hookMethod(methodJumpTargetLocked, new XC_MethodHook() {
+		findAndHookMethod(classBrightnessState, "jumpToTargetLocked", new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 				if (CallStackState.ENTERED_RUN.equals(nestingStatus.get())) {
+					Log.i(XposedTweakbox.TAG, "CRT: Native method was not called, calling it now");
+					
 					// Run method didn't call the animation, do it now before executing the jump to target
 					Object pmService = XposedHelpers.getSurroundingThis(param.thisObject);
 					int animationSetting = 0;
@@ -97,10 +101,9 @@ public class CrtEffect {
 			}
 		});
 
-
 		// Update a system property when the orientation changes.
-		Class<?> clsOrientationListener = Class.forName("com.android.internal.policy.impl.PhoneWindowManager$MyOrientationListener", false, classLoader);
-		XposedBridge.hookMethod(clsOrientationListener.getDeclaredMethod("onProposedRotationChanged", int.class), new XC_MethodHook() {
+		findAndHookMethod("com.android.internal.policy.impl.PhoneWindowManager$MyOrientationListener", classLoader,
+				"onProposedRotationChanged", int.class, new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 				int rotation = (Integer) param.args[0];

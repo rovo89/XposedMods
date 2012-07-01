@@ -1,12 +1,11 @@
 package de.robv.android.xposed.mods.tweakbox;
 
 import static de.robv.android.xposed.XposedHelpers.callMethod;
+import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
+import static de.robv.android.xposed.XposedHelpers.findClass;
 import static de.robv.android.xposed.XposedHelpers.getAdditionalInstanceField;
 import static de.robv.android.xposed.XposedHelpers.getObjectField;
 import static de.robv.android.xposed.XposedHelpers.setAdditionalInstanceField;
-
-import java.lang.reflect.Method;
-
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
@@ -26,12 +25,11 @@ public class VolumeKeysSkipTrack {
 		try {
 			VolumeKeysSkipTrack.alsoForScreenOn = false; //alsoForScreenOn; 
 
-			Class<?> classPhoneWindowManager = Class.forName("com.android.internal.policy.impl.PhoneWindowManager");
+			Class<?> classPhoneWindowManager = findClass("com.android.internal.policy.impl.PhoneWindowManager", null);
 			XposedBridge.hookAllConstructors(classPhoneWindowManager, handleConstructPhoneWindowManager);
 
-			Method method_handleInterceptKeyBeforeQueueing = classPhoneWindowManager
-					.getDeclaredMethod("interceptKeyBeforeQueueing", KeyEvent.class, int.class, boolean.class);
-			XposedBridge.hookMethod(method_handleInterceptKeyBeforeQueueing, handleInterceptKeyBeforeQueueing);
+			findAndHookMethod(classPhoneWindowManager, "interceptKeyBeforeQueueing",
+				KeyEvent.class, int.class, boolean.class, handleInterceptKeyBeforeQueueing);
 		} catch (Exception e) { XposedBridge.log(e); }
 	}
 
