@@ -43,12 +43,15 @@ public class ValueSeekBarPreference extends Preference implements OnSeekBarChang
     public ValueSeekBarPreference(
             Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-        setStep(attrs.getAttributeIntValue(null, "step", 1));
-        setMin(attrs.getAttributeIntValue(null, "min", 0));
-        setMax(attrs.getAttributeIntValue(null, "max", 100));
-        valueDisplayFormat = attrs.getAttributeValue(null, "displayFormat");
-        if (valueDisplayFormat == null)
-        	valueDisplayFormat = "%d";
+        
+        if (attrs != null) {
+	        setStep(attrs.getAttributeIntValue(null, "step", 1));
+	        setMin(attrs.getAttributeIntValue(null, "min", 0));
+	        setMax(attrs.getAttributeIntValue(null, "max", 100));
+	        valueDisplayFormat = attrs.getAttributeValue(null, "displayFormat");
+	        if (valueDisplayFormat == null)
+	        	valueDisplayFormat = "%d";
+        }
     }
 
     public ValueSeekBarPreference(Context context, AttributeSet attrs) {

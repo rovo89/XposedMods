@@ -9,7 +9,10 @@ public class XposedTweakboxSettings extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		setTitle(R.string.app_name);
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.settings);
+		
+        // Display the fragment as the main content.
+        getFragmentManager().beginTransaction().replace(android.R.id.content,
+                new PrefsFragment()).commit();
 	}
 
 	public static class PrefsFragment extends PreferenceFragment {

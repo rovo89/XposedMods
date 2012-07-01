@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
-
+    <de.robv.android.xposed.library.ui.TextViewPreference
+        android:title="@string/settings_header"
+        android:selectable="false" />
+    <de.robv.android.xposed.library.ui.SeparatorPreference height="3" />
+    
     <PreferenceScreen
         android:key="statusbar"
         android:title="Statusbar" >
@@ -20,6 +24,7 @@
             android:key="statusbar_color"
             android:summary="Color of the statusbar.\nNOTE: This will probably look weird if you are not on the home screen because most applications do not put anything behind the status bar (why should they?)"
             android:title="Background color" />
+        
         <net.margaritov.preference.colorpicker.ColorPickerPreference
             alphaSlider="true"
             showCheckbox="true"
@@ -28,58 +33,98 @@
             android:summary="Color of the clock in the statusbar"
             android:title="Clock color" />
     </PreferenceScreen>
+    
+    <PreferenceScreen
+        android:key="crt"
+        android:title="CRT effect" >
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="crt_off_effect"
+            android:summary="When turning off the screen, make it collapse like an old TV"
+            android:title="CRT off effect" />
+        
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="crt_on_effect"
+            android:summary="Show an effect similar to the one above, which expands when turning on the screen"
+            android:title="CRT on effect" />
+        
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="crt_effect_orientation"
+            android:summary="Uses portrait or landscape CRT effect depending on the device orientation. Requires auto-rotation to be active."
+            android:title="CRT effect auto-orientation" />
+        
+        <de.robv.android.xposed.library.ui.TextViewPreference
+            italic="true"
+            padding="15"
+            android:selectable="false"
+            android:title="Please note: You need to enabled the native library &apos;libsurfaceflinger.so&apos; in the Xposed installer to use these effects." />
+    </PreferenceScreen>
+
     <PreferenceScreen
         android:key="battery"
         android:title="Battery" >
+        
         <de.robv.android.xposed.library.ui.ValueSeekBarPreference
             displayFormat="&lt;= %d%%"
             android:defaultValue="5"
             android:key="low_battery_critical"
             android:summary="Display critical battery warning when battery level reaches this value"
             android:title="Critical battery level" />
+        
         <de.robv.android.xposed.library.ui.ValueSeekBarPreference
             displayFormat="&lt;= %d%%"
             android:defaultValue="15"
             android:key="low_battery_low"
             android:summary="Display low battery warning when battery level reaches this value"
             android:title="Low battery level" />
+        
         <de.robv.android.xposed.library.ui.ValueSeekBarPreference
             displayFormat=">= %d%%"
             android:defaultValue="20"
             android:key="low_battery_close"
             android:summary="Close low battery warning when battery level reaches this value."
             android:title="Normal battery level" />
-
+        
         <CheckBoxPreference
             android:defaultValue="true"
             android:key="battery_full_notification"
             android:summary="Show a notication when the phone is fully charged (Samsung only)"
             android:title="Battery full notification" />
     </PreferenceScreen>
+    
+    <PreferenceScreen
+        android:key="phone"
+        android:title="Phone" >
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="phone_vibrate_waiting"
+            android:summary="Vibrate when establishing a call and the destination is in a conversation. Applied immediately."
+            android:title="Vibrate on Call Wait" />
+        
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="phone_increasing_ringer"
+            android:summary="Progressively louder volume for incoming call ring sound. Applied immediately."
+            android:title="Increasing Ringer Volume" />
+        
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="phone_call_recording"
+            android:summary="Enable call recording button while in the middle of a call. Applied after reboot."
+            android:title="Call Recording" />
+    </PreferenceScreen>
+    
     <PreferenceScreen
         android:key="misc"
         android:title="Miscellaneous" >
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="crt_off_effect"
-            android:summary="When turning off the screen, make it collapse like an old TV"
-            android:title="CRT off effect" />
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="crt_on_effect"
-            android:summary="Show an effect similar to the one above, which expands when turning on the screen"
-            android:title="CRT on effect" />
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="crt_effect_orientation"
-            android:summary="Uses portrait or landscape CRT effect depending on the device orientation. Requires auto-rotation to be active."
-            android:title="CRT effect auto-orientation" />
         <CheckBoxPreference
             android:defaultValue="true"
             android:key="unplug_turns_screen_on"
             android:summary="Turn the screen on when you unplug your devices from AC/USB"
             android:title="Turn on screen when unplugging" />
-
+        
         <de.robv.android.xposed.library.ui.IntegerListPreference
             android:defaultValue="2"
             android:entries="@array/longHomePress"
@@ -100,26 +145,6 @@
             android:key="volume_keys_skip_track_screenon"
             android:summaryOff="The previous option is only active when the screen is turned off"
             android:summaryOn="The previous option is active independently from the screen state"
-            android:title="... also when screen is turned on" />
-        -->
-    </PreferenceScreen>
-    <PreferenceScreen
-        android:key="phone"
-        android:title="Phone" >
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="phone_vibrate_waiting"
-            android:summary="Vibrate when establishing a call and the destination is in a conversation. Applied immediately."
-            android:title="Vibrate on Call Wait" />
-        <CheckBoxPreference
-            android:defaultValue="true"
-            android:key="phone_increasing_ringer"
-            android:summary="Progressively louder volume for incoming call ring sound. Applied immediately."
-            android:title="Increasing Ringer Volume" />
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="phone_call_recording"
-            android:summary="Enable call recording button while in the middle of a call. Applied after reboot."
-            android:title="Call Recording" />
+            android:title="... also when screen is turned on" />        -->
     </PreferenceScreen>
 </PreferenceScreen>
