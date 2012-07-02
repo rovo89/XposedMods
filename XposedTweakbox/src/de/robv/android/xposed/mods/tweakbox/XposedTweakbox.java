@@ -1,19 +1,13 @@
 package de.robv.android.xposed.mods.tweakbox;
 
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
-import static de.robv.android.xposed.XposedHelpers.getIntField;
-import static de.robv.android.xposed.XposedHelpers.getObjectField;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 
 import java.lang.reflect.Constructor;
 import java.util.Locale;
-import java.util.Map;
 
-import android.app.AlertDialog;
 import android.app.AndroidAppHelper;
-import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.FeatureInfo;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -21,26 +15,17 @@ import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
-import android.media.AudioManager;
-import android.media.MediaRecorder;
-import android.os.Message;
-import android.os.Vibrator;
 import android.telephony.SignalStrength;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
-
-import com.android.internal.telephony.Phone;
-import com.android.internal.telephony.gsm.SuppServiceNotification;
-
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
 import de.robv.android.xposed.callbacks.XC_LayoutInflated;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
@@ -71,27 +56,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		} catch (Throwable t) { XposedBridge.log(t); }
 		
 
-		try {
-			if (pref.getBoolean("phone_enable_sip", false)) {
-				XResources.setSystemWideReplacement("android", "bool", "config_built_in_sip_phone", true);
-				XResources.setSystemWideReplacement("android", "bool", "config_sip_wifi_only", false);
-				
-				findAndHookMethod("com.android.server.pm.PackageManagerService", null, "readPermissions", new XC_MethodHook() {
-					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-						@SuppressWarnings("unchecked")
-						Map<String, FeatureInfo> mAvailableFeatures = (Map<String, FeatureInfo>) getObjectField(param.thisObject, "mAvailableFeatures");
-
-						FeatureInfo fi = new FeatureInfo();
-						fi.name = "android.software.sip";
-						mAvailableFeatures.put(fi.name, fi);
-
-						fi = new FeatureInfo();
-						fi.name = "android.software.sip.voip";
-						mAvailableFeatures.put(fi.name, fi);
-					};
-				});
-			}
-		} catch (Throwable t) { XposedBridge.log(t); }
+		PhoneTweaks.initZygote(pref);
 
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_longPressOnHomeBehavior", pref.getInt("long_home_press_behaviour", 2));
@@ -290,83 +255,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			
 			
 		} else if (lpparam.packageName.equals("com.android.phone")) {
-			// Handle vibrate on Call Wait
-			try {
-				findAndHookMethod("com.android.phone.PhoneUtils", lpparam.classLoader, "displaySSInfo",
-						Phone.class, Context.class, SuppServiceNotification.class, Message.class, AlertDialog.class, new XC_MethodHook() {
-					@Override
-					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-						int notificationType = getIntField(param.args[2], "notificationType");
-						int code = getIntField(param.args[2], "code");
-						
-						 // Waiting for target party
-						if (notificationType == 0 && code == 3) {
-							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-							if (pref.getBoolean("phone_vibrate_waiting", false)) {
-								Context context = (Context) param.args[1];
-	
-								// Get instance of Vibrator from current Context
-								Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-								v.vibrate(new long[] { 0, 200, 200, 200, 200, 800 }, -1); // Vibrate with a simple pattern
-							}
-						}
-					}
-				});
-			} catch (Throwable t) { XposedBridge.log(t); }
-
-			// Handle increasing ringer tone
-			try {
-				final ThreadLocal<Object> insideRingerHandler = new ThreadLocal<Object>();
-
-				// Control whether the execution is inside handleMessage or not()
-				findAndHookMethod("com.android.phone.Ringer$1", lpparam.classLoader, "handleMessage", Message.class, new XC_MethodHook() {
-					@Override
-					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-						insideRingerHandler.set(new Object());
-					}
-
-					@Override
-					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-						insideRingerHandler.set(null);
-					}
-				});
-
-				findAndHookMethod(AudioManager.class, "setStreamVolume", int.class, int.class, int.class, new XC_MethodHook() {
-					@Override
-					protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-						if (insideRingerHandler.get() != null) {
-							// Within execution of handleMessage()
-							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-							if (!pref.getBoolean("phone_increasing_ringer", true)) {
-								// No increasing ringer; skip changing the ringer volume
-								param.setResult(null);
-							}
-						}
-					}
-				});
-			} catch (Throwable t) { XposedBridge.log(t); }
-
-
-			// Handle call recording
-			if (pref.getBoolean("phone_call_recording", false)) {
-				try {
-					findAndHookMethod("com.android.phone.PhoneFeature", lpparam.classLoader, "hasFeature", String.class, new XC_MethodHook() {
-						@Override
-						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-							if ("voice_call_recording".equals(param.args[0])) {
-								param.setResult(Boolean.TRUE);
-							}
-						}
-					});
-
-					findAndHookMethod(MediaRecorder.class, "prepare", new XC_MethodHook() {
-						@Override
-						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-							XposedHelpers.callMethod(param.thisObject, "start");
-						}
-					});
-				} catch (Throwable t) { XposedBridge.log(t); }
-			}
+			PhoneTweaks.loadPackage(pref, lpparam.classLoader);
 		}
 	}
 
