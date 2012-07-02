@@ -1,23 +1,17 @@
 package de.robv.android.xposed.mods.tweakbox;
 
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
-import static de.robv.android.xposed.XposedHelpers.setFloatField;
 
 import java.lang.reflect.Constructor;
 import java.util.Locale;
 
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
-import android.content.res.CompatibilityInfo;
-import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.telephony.SignalStrength;
-import android.util.DisplayMetrics;
-import android.view.Display;
 import android.view.WindowManager;
 import android.widget.TextView;
 import de.robv.android.xposed.IXposedHookInitPackageResources;
@@ -55,9 +49,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					pref.getBoolean("show_ongoing_ime_switcher", true));
 		} catch (Throwable t) { XposedBridge.log(t); }
 		
-
-		PhoneTweaks.initZygote(pref);
-
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_longPressOnHomeBehavior", pref.getInt("long_home_press_behaviour", 2));
 		} catch (Throwable t) { XposedBridge.log(t); }
@@ -68,65 +59,11 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			XResources.setSystemWideReplacement("android", "integer", "config_lowBatteryCloseWarningLevel", pref.getInt("low_battery_close", 20));
 		} catch (Throwable t) { XposedBridge.log(t); }
 
-		// density / resource configuration manipulation
-		try {
-			findAndHookMethod(Display.class, "init", int.class, new XC_MethodHook() {
-				@Override
-				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-					String packageName = AndroidAppHelper.currentPackageName();
-
-					int packageDensity = pref.getInt("dpioverride/" + packageName + "/density", pref.getInt("dpioverride/default/density", 0));
-					if (packageDensity > 0)
-						setFloatField(param.thisObject, "mDensity", packageDensity / 160.0f);
-				};
-			});
-
-			findAndHookMethod(Resources.class, "updateConfiguration",
-					Configuration.class, DisplayMetrics.class, CompatibilityInfo.class, new XC_MethodHook() {
-				@Override
-				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-					Configuration config = (Configuration) param.args[0];
-					if (config != null && param.thisObject instanceof XResources) {
-						String packageName = ((XResources) param.thisObject).getPackageName();
-						if (packageName != null) {
-							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
-
-							int swdp = pref.getInt("dpioverride/" + packageName + "/swdp", pref.getInt("dpioverride/default/swdp", 0));
-							int wdp = pref.getInt("dpioverride/" + packageName + "/wdp", pref.getInt("dpioverride/default/wdp", 0));
-							int hdp = pref.getInt("dpioverride/" + packageName + "/hdp", pref.getInt("dpioverride/default/hdp", 0));
-							Locale packageLocale = getPackageSpecificLocale(packageName);
-
-							if (swdp > 0 || wdp > 0 || hdp > 0 || packageLocale != null) {
-								Configuration newConfig = new Configuration(config);
-								if (swdp > 0)
-									newConfig.smallestScreenWidthDp = swdp;
-
-								if (wdp > 0)
-									newConfig.screenWidthDp = wdp;
-
-								if (hdp > 0)
-									newConfig.screenHeightDp = hdp;
-
-								if (packageLocale != null) {
-									newConfig.locale = packageLocale;
-									// AndroidAppHelper.currentPackageName() is the package name of the current process,
-									// in contrast to the package name for these settings (that might be loaded by a different
-											// process as well)
-									if (AndroidAppHelper.currentPackageName().equals(packageName))
-										Locale.setDefault(packageLocale);
-								}
-
-								param.args[0] = newConfig;
-							}
-						}
-					}
-				}
-			});
-		} catch (Throwable t) { XposedBridge.log(t); }
-
 		if (pref.getBoolean("volume_keys_skip_track", false))
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
+		
+		AppSpecificConfiguration.initZygote(pref);
+		PhoneTweaks.initZygote(pref);
 	}
 
 
@@ -134,7 +71,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
 
-		Locale packageLocale = getPackageSpecificLocale(lpparam.packageName);
+		Locale packageLocale = AppSpecificConfiguration.getPackageSpecificLocale(lpparam.packageName);
 		if (packageLocale != null)
 			Locale.setDefault(packageLocale);
 
@@ -162,76 +99,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			}
 
 			if (pref.getInt("num_signal_bars", 4) > 4) {
-				try {
-					// correction for signal strength level
-					findAndHookMethod(SignalStrength.class, "getLevel", new XC_MethodHook() {
-						@Override
-						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-							param.setResult(getCorrectedLevel((Integer) param.getResult()));
-						}
-						private int getCorrectedLevel(int level) {
-							// value was overridden by our more specific method already
-							if (level >= 10000)
-								return level - 10000;
-
-							// interpolate for other modes
-							if (signalStrengthBars == 4 || level == 0) {
-								return level;
-
-							} else if (signalStrengthBars == 5) {
-								if (level == 4) return 5;
-								else if (level == 3) return 4;
-								else if (level == 2) return 3;
-								else if (level == 1) return 2;
-
-							} else if (signalStrengthBars == 6) {
-								if (level == 4) return 6;
-								else if (level == 3) return 4;
-								else if (level == 2) return 3;
-								else if (level == 1) return 2;
-							}
-							// shouldn't get here
-							XposedBridge.log("could not determine signal level (original result was " + level + ")");
-							return 0;
-						}
-					});
-
-					findAndHookMethod(SignalStrength.class, "getGsmLevel", new XC_MethodHook() {
-						@Override
-						protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-							int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
-							param.setResult(getSignalLevel(asu));
-						}
-						private int getSignalLevel(int asu) {
-							switch (signalStrengthBars) {
-							case 6:
-								if (asu <= 1 || asu == 99) return 10000;
-								else if (asu >= 12) return 10006;
-								else if (asu >= 10) return 10005;
-								else if (asu >= 8)  return 10004;
-								else if (asu >= 6)  return 10003;
-								else if (asu >= 4)  return 10002;
-								else return 10001;
-
-							case 5:
-								if (asu <= 1 || asu == 99) return 10000;
-								else if (asu >= 12) return 10005;
-								else if (asu >= 10) return 10004;
-								else if (asu >= 7)  return 10003;
-								else if (asu >= 4)  return 10002;
-								else return 10001;
-
-							default:
-								// original implementation (well, kind of. should not be needed anyway)
-								if (asu <= 2 || asu == 99) return 10000;
-								else if (asu >= 12) return 10004;
-								else if (asu >= 8)  return 10003;
-								else if (asu >= 5)  return 10002;
-								else return 10001;
-							}
-						};
-					});
-				} catch (Throwable t) { XposedBridge.log(t); }
+				hookSignalLevelFixes();
 			}
 			
 			
@@ -249,10 +117,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			}
 			
 		} else if (lpparam.packageName.equals("android")) {
-			try {
-				CrtEffect.hookScreenOff(pref, lpparam.classLoader);
-			} catch (Throwable t) { XposedBridge.log(t); }
-			
+			CrtEffect.loadPackage(pref, lpparam.classLoader);
 			
 		} else if (lpparam.packageName.equals("com.android.phone")) {
 			PhoneTweaks.loadPackage(pref, lpparam.classLoader);
@@ -292,16 +157,77 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			}
 		}
 	}
+	
+	private static void hookSignalLevelFixes() {
+		try {
+			// correction for signal strength level
+			findAndHookMethod(SignalStrength.class, "getLevel", new XC_MethodHook() {
+				@Override
+				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+					param.setResult(getCorrectedLevel((Integer) param.getResult()));
+				}
+				private int getCorrectedLevel(int level) {
+					// value was overridden by our more specific method already
+					if (level >= 10000)
+						return level - 10000;
 
-	private static Locale getPackageSpecificLocale(String packageName) {
-		String locale = pref.getString("dpioverride/" + packageName + "/locale", pref.getString("dpioverride/default/locale", null));
-		if (locale == null || locale.isEmpty())
-			return null;
+					// interpolate for other modes
+					if (signalStrengthBars == 4 || level == 0) {
+						return level;
 
-		String[] localeParts = locale.split("_", 3);
-		String language = localeParts[0];
-		String region = (localeParts.length >= 2) ? localeParts[1] : "";
-		String variant = (localeParts.length >= 3) ? localeParts[2] : "";
-		return new Locale(language, region, variant);
-	}
+					} else if (signalStrengthBars == 5) {
+						if (level == 4) return 5;
+						else if (level == 3) return 4;
+						else if (level == 2) return 3;
+						else if (level == 1) return 2;
+
+					} else if (signalStrengthBars == 6) {
+						if (level == 4) return 6;
+						else if (level == 3) return 4;
+						else if (level == 2) return 3;
+						else if (level == 1) return 2;
+					}
+					// shouldn't get here
+					XposedBridge.log("could not determine signal level (original result was " + level + ")");
+					return 0;
+				}
+			});
+
+			findAndHookMethod(SignalStrength.class, "getGsmLevel", new XC_MethodHook() {
+				@Override
+				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+					int asu = ((SignalStrength) param.thisObject).getGsmSignalStrength();
+					param.setResult(getSignalLevel(asu));
+				}
+				private int getSignalLevel(int asu) {
+					switch (signalStrengthBars) {
+					case 6:
+						if (asu <= 1 || asu == 99) return 10000;
+						else if (asu >= 12) return 10006;
+						else if (asu >= 10) return 10005;
+						else if (asu >= 8)  return 10004;
+						else if (asu >= 6)  return 10003;
+						else if (asu >= 4)  return 10002;
+						else return 10001;
+
+					case 5:
+						if (asu <= 1 || asu == 99) return 10000;
+						else if (asu >= 12) return 10005;
+						else if (asu >= 10) return 10004;
+						else if (asu >= 7)  return 10003;
+						else if (asu >= 4)  return 10002;
+						else return 10001;
+
+					default:
+						// original implementation (well, kind of. should not be needed anyway)
+						if (asu <= 2 || asu == 99) return 10000;
+						else if (asu >= 12) return 10004;
+						else if (asu >= 8)  return 10003;
+						else if (asu >= 5)  return 10002;
+						else return 10001;
+					}
+				};
+			});
+		} catch (Throwable t) { XposedBridge.log(t); }
+    }	
 }
