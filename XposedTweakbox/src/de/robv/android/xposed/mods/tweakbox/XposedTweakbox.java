@@ -2,15 +2,18 @@ package de.robv.android.xposed.mods.tweakbox;
 
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 import static de.robv.android.xposed.XposedHelpers.getIntField;
+import static de.robv.android.xposed.XposedHelpers.getObjectField;
 import static de.robv.android.xposed.XposedHelpers.setFloatField;
 
 import java.lang.reflect.Constructor;
 import java.util.Locale;
+import java.util.Map;
 
 import android.app.AlertDialog;
 import android.app.AndroidAppHelper;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.FeatureInfo;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -58,14 +61,37 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
 
 		try {
-			if (!pref.getBoolean("unplug_turns_screen_on", true)) {
-				XResources.setSystemWideReplacement("android", "bool", "config_unplugTurnsOnScreen", false);
-			}
+			XResources.setSystemWideReplacement("android", "bool", "config_unplugTurnsOnScreen",
+					pref.getBoolean("unplug_turns_screen_on", true));
 		} catch (Throwable t) { XposedBridge.log(t); }
 
-		XResources.setSystemWideReplacement("android", "bool", "show_ongoing_ime_switcher", false);
-		XResources.setSystemWideReplacement("android", "bool", "config_built_in_sip_phone", true);
-		XResources.setSystemWideReplacement("android", "bool", "config_sip_wifi_only", false);
+		try {
+			XResources.setSystemWideReplacement("android", "bool", "show_ongoing_ime_switcher",
+					pref.getBoolean("show_ongoing_ime_switcher", true));
+		} catch (Throwable t) { XposedBridge.log(t); }
+		
+
+		try {
+			if (pref.getBoolean("phone_enable_sip", false)) {
+				XResources.setSystemWideReplacement("android", "bool", "config_built_in_sip_phone", true);
+				XResources.setSystemWideReplacement("android", "bool", "config_sip_wifi_only", false);
+				
+				findAndHookMethod("com.android.server.pm.PackageManagerService", null, "readPermissions", new XC_MethodHook() {
+					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+						@SuppressWarnings("unchecked")
+						Map<String, FeatureInfo> mAvailableFeatures = (Map<String, FeatureInfo>) getObjectField(param.thisObject, "mAvailableFeatures");
+
+						FeatureInfo fi = new FeatureInfo();
+						fi.name = "android.software.sip";
+						mAvailableFeatures.put(fi.name, fi);
+
+						fi = new FeatureInfo();
+						fi.name = "android.software.sip.voip";
+						mAvailableFeatures.put(fi.name, fi);
+					};
+				});
+			}
+		} catch (Throwable t) { XposedBridge.log(t); }
 
 		try {
 			XResources.setSystemWideReplacement("android", "integer", "config_longPressOnHomeBehavior", pref.getInt("long_home_press_behaviour", 2));
@@ -245,16 +271,17 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			
 			
 		} else if (lpparam.packageName.equals("com.android.vending")) {
-			try {
-				findAndHookMethod("com.google.android.vending.remoting.protos.DeviceConfigurationProto", lpparam.classLoader,
-						"getScreenDensity", new XC_MethodReplacement() {
-					@Override
-					protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-						return 240;
-					}
-				});
-			} catch (Throwable t) { XposedBridge.log(t); }
-			
+			if (pref.getBoolean("vending_fake_240dpi", false)) {
+				try {
+					findAndHookMethod("com.google.android.vending.remoting.protos.DeviceConfigurationProto", lpparam.classLoader,
+							"getScreenDensity", new XC_MethodReplacement() {
+						@Override
+						protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
+							return 240;
+						}
+					});
+				} catch (Throwable t) { XposedBridge.log(t); }
+			}
 			
 		} else if (lpparam.packageName.equals("android")) {
 			try {
@@ -338,7 +365,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 							XposedHelpers.callMethod(param.thisObject, "start");
 						}
 					});
-
 				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 		}

@@ -32,6 +32,12 @@
             android:key="statusbar_clock_color"
             android:summary="Color of the clock in the statusbar"
             android:title="Clock color" />
+        
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="show_ongoing_ime_switcher"
+            android:summary="While typing, show the ongoing notification from which you can choose the input method (keyboard)"
+            android:title="Show input method switcher" />
     </PreferenceScreen>
     
     <PreferenceScreen
@@ -59,7 +65,7 @@
             italic="true"
             padding="15"
             android:selectable="false"
-            android:title="Please note: You need to enabled the native library &apos;libsurfaceflinger.so&apos; in the Xposed installer to use these effects." />
+            android:title="Please note: You need to enabled the native library &quot;libsurfaceflinger.so&quot; in the Xposed Installer to use these effects." />
     </PreferenceScreen>
 
     <PreferenceScreen
@@ -70,21 +76,21 @@
             displayFormat="&lt;= %d%%"
             android:defaultValue="5"
             android:key="low_battery_critical"
-            android:summary="Display critical battery warning when battery level reaches this value"
+            android:summary="Display a critical battery warning when battery level reaches this value"
             android:title="Critical battery level" />
         
         <de.robv.android.xposed.library.ui.ValueSeekBarPreference
             displayFormat="&lt;= %d%%"
             android:defaultValue="15"
             android:key="low_battery_low"
-            android:summary="Display low battery warning when battery level reaches this value"
+            android:summary="Display a low battery warning when battery level reaches this value"
             android:title="Low battery level" />
         
         <de.robv.android.xposed.library.ui.ValueSeekBarPreference
             displayFormat=">= %d%%"
             android:defaultValue="20"
             android:key="low_battery_close"
-            android:summary="Close low battery warning when battery level reaches this value."
+            android:summary="Close the low battery warning when battery level reaches this value."
             android:title="Normal battery level" />
         
         <CheckBoxPreference
@@ -100,7 +106,7 @@
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="phone_vibrate_waiting"
-            android:summary="Vibrate when establishing a call and the destination is in a conversation. Applied immediately."
+            android:summary="Vibrate when the person you are  calling is already in another call, but can choose to interrupt it and answer yours (&quot;Call Wait&quot;). Applied immediately."
             android:title="Vibrate on Call Wait" />
         
         <CheckBoxPreference
@@ -114,6 +120,18 @@
             android:key="phone_call_recording"
             android:summary="Enable call recording button while in the middle of a call. Applied after reboot."
             android:title="Call Recording" />
+        
+        <de.robv.android.xposed.library.ui.TextViewPreference
+            italic="true"
+            padding="15"
+            android:selectable="false"
+            android:title="Please note: You need to enabled the native libraries &apos;hw/audio_policy.exynos4.so&apos; and &apos;hw/audio.primary.exynos4.so&apos; in the Xposed Installer to use call recording." />
+        
+         <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="phone_enable_sip"
+            android:summary="Enable built-in SIP feature for the Samsung's phone app. Configure it in the phone settings."
+            android:title="Built-in SIP" />
     </PreferenceScreen>
     
     <PreferenceScreen
@@ -147,4 +165,14 @@
             android:summaryOn="The previous option is active independently from the screen state"
             android:title="... also when screen is turned on" />        -->
     </PreferenceScreen>
+    
+    <PreferenceScreen
+        android:key="experimental"
+        android:title="Experimental" >
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="vending_fake_240dpi"
+            android:summary="Fake a density of 240 DPI for the data that is sent to Google. Try this if some apps don't appear in the Play Store (might take some time to be effective). Has no effect on displayed density."
+            android:title="Fake 240 DPI for Play Store" />
+	</PreferenceScreen>
 </PreferenceScreen>
