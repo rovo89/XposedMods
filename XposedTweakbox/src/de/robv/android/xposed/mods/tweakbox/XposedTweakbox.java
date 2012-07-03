@@ -11,7 +11,10 @@ import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
+import android.preference.Preference;
 import android.telephony.SignalStrength;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.TextView;
 import de.robv.android.xposed.IXposedHookInitPackageResources;
@@ -121,6 +124,19 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 			
 		} else if (lpparam.packageName.equals("com.android.phone")) {
 			PhoneTweaks.loadPackage(pref, lpparam.classLoader);
+			
+		} else if (lpparam.packageName.equals("de.robv.android.xposed.mods.tweakbox")) {
+			try {
+				// remove restriction to 4 summary lines for the Tweakbox settings app
+				findAndHookMethod(Preference.class, "getView", View.class, ViewGroup.class, new XC_MethodHook() {
+					@Override
+					protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+						View summary = ((View) param.getResult()).findViewById(android.R.id.summary);
+						if (summary instanceof TextView)
+							((TextView) summary).setMaxLines(Integer.MAX_VALUE);
+					}
+				});
+			} catch (Throwable t) { XposedBridge.log(t); }
 		}
 	}
 

@@ -125,7 +125,7 @@
             italic="true"
             padding="15"
             android:selectable="false"
-            android:title="Please note: You need to enable the native libraries &apos;hw/audio_policy.exynos4.so&apos; and &apos;hw/audio.primary.exynos4.so&apos; in the Xposed Installer to use call recording." />
+            android:title="Please note: You need to enable the native libraries &quot;hw/audio_policy.exynos4.so&quot; and &quot;hw/audio.primary.exynos4.so&quot; in the Xposed Installer to use call recording." />
         
          <CheckBoxPreference
             android:defaultValue="false"
