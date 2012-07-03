@@ -12,7 +12,6 @@ import java.lang.reflect.Method;
 import android.app.AndroidAppHelper;
 import android.content.SharedPreferences;
 import android.os.SystemProperties;
-import android.util.Log;
 import android.view.WindowManagerPolicy;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -60,14 +59,12 @@ public class CrtEffect {
 					animationSetting |= (pref.getBoolean("crt_on_effect", false))  ? ANIM_SETTING_ON  : 0;
 					setIntField(powerManagerService, "mAnimationSetting", animationSetting);
 	
-					Log.d(XposedTweakbox.TAG, "CRT: Setting entry on run");
 					nestingStatus.set(CallStackState.ENTERED_RUN);
 				}
 	
 				@Override
 				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
 					nestingStatus.set(null);
-					Log.d(XposedTweakbox.TAG, "CRT: Clearing method run on exit");
 				}
 			});
 	
@@ -76,9 +73,7 @@ public class CrtEffect {
 			XposedBridge.hookMethod(methodNativeAnimation, new XC_MethodHook() {
 				@Override
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-					Log.d(XposedTweakbox.TAG, "Executing the native method");
 					if (CallStackState.ENTERED_RUN.equals(nestingStatus.get())) {
-						Log.d(XposedTweakbox.TAG, "CRT: Setting status to past native method");
 						nestingStatus.set(CallStackState.EXECUTED_NATIVE);
 					}
 				}
@@ -88,8 +83,6 @@ public class CrtEffect {
 				@Override
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					if (CallStackState.ENTERED_RUN.equals(nestingStatus.get())) {
-						Log.i(XposedTweakbox.TAG, "CRT: Native method was not called, calling it now");
-						
 						// Run method didn't call the animation, do it now before executing the jump to target
 						Object pmService = XposedHelpers.getSurroundingThis(param.thisObject);
 						int animationSetting = 0;

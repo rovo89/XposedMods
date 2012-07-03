@@ -4,7 +4,13 @@
         name="libsurfaceflinger.so"
         asset="libs/libsurfaceflinger.so_I9100_Stock_LS" >
 		CRT off/on fix for stock-based I9100 ROMs (including support for landscape)    </lib>
-
+    
+    <lib
+        name="libsurfaceflinger.so"
+        asset="libs/libsurfaceflinger.so_I9300_Stock_LS" >
+		CRT off/on fix for stock-based I9300 ROMs (including support for landscape)
+    </lib>
+    
     <lib
         name="hw/audio_policy.exynos4.so"
         asset="libs/audio_policy.exynos4.so_I9100_Stock" >
