@@ -65,7 +65,7 @@
             italic="true"
             padding="15"
             android:selectable="false"
-            android:title="Please note: You need to enable the native library &quot;libsurfaceflinger.so&quot; in the Xposed Installer to use these effects." />
+            android:title="You need a special version of &quot;libsurfaceflinger.so&quot; to use most of these effects." />
     </PreferenceScreen>
 
     <PreferenceScreen
@@ -125,7 +125,7 @@
             italic="true"
             padding="15"
             android:selectable="false"
-            android:title="Please note: You need to enable the native libraries &quot;hw/audio_policy.exynos4.so&quot; and &quot;hw/audio.primary.exynos4.so&quot; in the Xposed Installer to use call recording." />
+            android:title="Call recording will only work if you have special versions of &quot;hw/audio_policy.exynos4.so&quot; and &quot;hw/audio.primary.exynos4.so&quot;." />
         
          <CheckBoxPreference
             android:defaultValue="false"
