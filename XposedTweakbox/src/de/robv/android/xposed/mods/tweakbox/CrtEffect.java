@@ -9,11 +9,10 @@ import static de.robv.android.xposed.XposedHelpers.setIntField;
 
 import java.lang.reflect.Method;
 
-import android.app.AndroidAppHelper;
-import android.content.SharedPreferences;
 import android.os.SystemProperties;
 import android.view.WindowManagerPolicy;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -41,7 +40,7 @@ public class CrtEffect {
 	 * Hook the methods related with the screen off event in order to use the active CRT On/Off preferences.
 	 * Handles the missing call to "nativeStartSurfaceFlingerAnimation" on I9300.
 	 */
-	public static void loadPackage(final SharedPreferences pref, ClassLoader classLoader) throws Exception {
+	public static void loadPackage(final XSharedPreferences pref, ClassLoader classLoader) throws Exception {
 
 		final ThreadLocal<CallStackState> nestingStatus = new ThreadLocal<CallStackState>();
 		
@@ -52,7 +51,7 @@ public class CrtEffect {
 				@Override
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					// About to turn off screen
-					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+					pref.reload();
 					Object powerManagerService = getSurroundingThis(param.thisObject);
 					int animationSetting;
 					animationSetting  = (pref.getBoolean("crt_off_effect", false)) ? ANIM_SETTING_OFF : 0;
@@ -102,7 +101,7 @@ public class CrtEffect {
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					int rotation = (Integer) param.args[0];
 					if (rotation >= 0) {
-						AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+						pref.reload();
 						if (pref.getBoolean("crt_effect_orientation", false)) {
 							SystemProperties.set("runtime.xposed.orientation", String.valueOf(rotation));
 						} else {

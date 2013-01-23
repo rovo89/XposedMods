@@ -7,7 +7,6 @@ import static de.robv.android.xposed.XposedHelpers.getObjectField;
 import java.util.Map;
 
 import android.app.AlertDialog;
-import android.app.AndroidAppHelper;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.FeatureInfo;
@@ -21,6 +20,7 @@ import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.gsm.SuppServiceNotification;
 
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
@@ -51,7 +51,7 @@ class PhoneTweaks {
 		} catch (Throwable t) { XposedBridge.log(t); }
 	}
 	
-	public static void loadPackage(final SharedPreferences pref, ClassLoader classLoader) {
+	public static void loadPackage(final XSharedPreferences pref, ClassLoader classLoader) {
 		// Handle vibrate on Call Wait
 		try {
 			findAndHookMethod("com.android.phone.PhoneUtils", classLoader, "displaySSInfo",
@@ -63,7 +63,7 @@ class PhoneTweaks {
 
 					// Waiting for target party
 					if (notificationType == 0 && code == 3) {
-						AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+						pref.reload();
 						if (pref.getBoolean("phone_vibrate_waiting", false)) {
 							Context context = (Context) param.args[1];
 
@@ -98,7 +98,7 @@ class PhoneTweaks {
 				protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 					if (insideRingerHandler.get() != null) {
 						// Within execution of handleMessage()
-						AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+						pref.reload();
 						if (!pref.getBoolean("phone_increasing_ringer", true)) {
 							// No increasing ringer; skip changing the ringer volume
 							param.setResult(null);

@@ -5,12 +5,11 @@ import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 import java.lang.reflect.Constructor;
 import java.util.Locale;
 
-import android.app.AndroidAppHelper;
-import android.content.SharedPreferences;
 import android.content.res.XResources;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.preference.Preference;
 import android.telephony.SignalStrength;
 import android.view.View;
@@ -22,6 +21,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
 import de.robv.android.xposed.callbacks.XC_LayoutInflated;
@@ -32,12 +32,12 @@ import de.robv.android.xposed.callbacks.XCallback;
 public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPackageResources, IXposedHookLoadPackage {
 	public static final String TAG = "Tweakbox";
 	public static final String MY_PACKAGE_NAME = XposedTweakbox.class.getPackage().getName();
-	private static SharedPreferences pref;
+	private static XSharedPreferences pref;
 	private static int signalStrengthBars = 4;
 
 	@Override
 	public void initZygote(StartupParam startupParam) {
-		pref = AndroidAppHelper.getDefaultSharedPreferencesForPackage(MY_PACKAGE_NAME);
+		pref = new XSharedPreferences(MY_PACKAGE_NAME);
 		
 		// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
 		XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
@@ -72,7 +72,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 
 	@Override
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
-		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		pref.reload();
 
 		Locale packageLocale = AppSpecificConfiguration.getPackageSpecificLocale(lpparam.packageName);
 		if (packageLocale != null)
@@ -142,7 +142,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 
 	@Override
 	public void handleInitPackageResources(InitPackageResourcesParam resparam) throws Throwable {
-		AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+		pref.reload();
 		
 		if (resparam.packageName.equals("com.android.systemui")) {
 			try {
@@ -152,8 +152,13 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 
 			if (pref.getBoolean("statusbar_color_enabled", false)) {
 				try {
-					int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
-					resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new ColorDrawable(statusbarColor));
+					final int statusbarColor = pref.getInt("statusbar_color", Color.BLACK);
+					resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new XResources.DrawableLoader() {
+						@Override
+						public Drawable newDrawable(XResources res, int id) throws Throwable {
+							return new ColorDrawable(statusbarColor));
+						}
+					});
 				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 

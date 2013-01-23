@@ -6,7 +6,6 @@ import static de.robv.android.xposed.XposedHelpers.setFloatField;
 import java.util.Locale;
 
 import android.app.AndroidAppHelper;
-import android.content.SharedPreferences;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -14,13 +13,14 @@ import android.content.res.XResources;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 
 class AppSpecificConfiguration {
-	private static SharedPreferences pref;
+	private static XSharedPreferences pref;
 	private AppSpecificConfiguration() {}
 	
-	public static void initZygote(final SharedPreferences pref) {
+	public static void initZygote(final XSharedPreferences pref) {
 		AppSpecificConfiguration.pref = pref;
 		
 		// density / resource configuration manipulation
@@ -28,7 +28,7 @@ class AppSpecificConfiguration {
 			findAndHookMethod(Display.class, "init", int.class, new XC_MethodHook() {
 				@Override
 				protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-					AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+					pref.reload();
 					String packageName = AndroidAppHelper.currentPackageName();
 
 					int packageDensity = pref.getInt("dpioverride/" + packageName + "/density", pref.getInt("dpioverride/default/density", 0));
@@ -45,7 +45,7 @@ class AppSpecificConfiguration {
 					if (config != null && param.thisObject instanceof XResources) {
 						String packageName = ((XResources) param.thisObject).getPackageName();
 						if (packageName != null) {
-							AndroidAppHelper.reloadSharedPreferencesIfNeeded(pref);
+							pref.reload();
 
 							int swdp = pref.getInt("dpioverride/" + packageName + "/swdp", pref.getInt("dpioverride/default/swdp", 0));
 							int wdp = pref.getInt("dpioverride/" + packageName + "/wdp", pref.getInt("dpioverride/default/wdp", 0));
