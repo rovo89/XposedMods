@@ -156,7 +156,7 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 					resparam.res.setReplacement("com.android.systemui", "drawable", "status_bar_background", new XResources.DrawableLoader() {
 						@Override
 						public Drawable newDrawable(XResources res, int id) throws Throwable {
-							return new ColorDrawable(statusbarColor));
+							return new ColorDrawable(statusbarColor);
 						}
 					});
 				} catch (Throwable t) { XposedBridge.log(t); }
