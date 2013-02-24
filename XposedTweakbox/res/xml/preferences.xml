@@ -65,7 +65,7 @@
             italic="true"
             padding="15"
             android:selectable="false"
-            android:title="You need a special version of &quot;libsurfaceflinger.so&quot; to use most of these effects." />
+            android:title="You need a special version of &quot;libsurfaceflinger.so&quot; to use most of these effects. If it doesn't work for you - sorry, I won't fix it." />
     </PreferenceScreen>
 
     <PreferenceScreen
