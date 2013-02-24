@@ -3,7 +3,6 @@ package de.robv.android.xposed.mods.tweakbox;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 
 import java.lang.reflect.Constructor;
-import java.util.Locale;
 
 import android.content.res.XResources;
 import android.graphics.Color;
@@ -64,7 +63,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		if (pref.getBoolean("volume_keys_skip_track", false))
 			VolumeKeysSkipTrack.init(pref.getBoolean("volume_keys_skip_track_screenon", false));
 		
-		AppSpecificConfiguration.initZygote(pref);
 		PhoneTweaks.initZygote(pref);
 	}
 
@@ -72,10 +70,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 	@Override
 	public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
 		pref.reload();
-
-		Locale packageLocale = AppSpecificConfiguration.getPackageSpecificLocale(lpparam.packageName);
-		if (packageLocale != null)
-			Locale.setDefault(packageLocale);
 
 		if (lpparam.packageName.equals("com.android.systemui")) {
 			if (!pref.getBoolean("battery_full_notification", true)) {
