@@ -118,19 +118,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 			
-		} else if (lpparam.packageName.equals("com.android.vending")) {
-			if (pref.getBoolean("vending_fake_240dpi", false)) {
-				try {
-					findAndHookMethod("com.google.android.vending.remoting.protos.DeviceConfigurationProto", lpparam.classLoader,
-							"getScreenDensity", new XC_MethodReplacement() {
-						@Override
-						protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-							return 240;
-						}
-					});
-				} catch (Throwable t) { XposedBridge.log(t); }
-			}
-			
 		} else if (lpparam.packageName.equals("android")) {
 			CrtEffect.loadPackage(pref, lpparam.classLoader);
 			

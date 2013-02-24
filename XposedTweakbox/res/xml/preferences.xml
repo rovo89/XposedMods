@@ -165,14 +165,4 @@
             android:summaryOn="The previous option is active independently from the screen state"
             android:title="... also when screen is turned on" />        -->
     </PreferenceScreen>
-    
-    <PreferenceScreen
-        android:key="experimental"
-        android:title="Experimental" >
-        <CheckBoxPreference
-            android:defaultValue="false"
-            android:key="vending_fake_240dpi"
-            android:summary="Fake a density of 240 DPI for the data that is sent to Google. Try this if some apps don't appear in the Play Store (might take some time to be effective). Has no effect on displayed density."
-            android:title="Fake 240 DPI for Play Store" />
-	</PreferenceScreen>
 </PreferenceScreen>
