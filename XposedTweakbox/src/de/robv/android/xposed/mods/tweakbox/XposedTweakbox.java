@@ -24,7 +24,6 @@ import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_InitPackageResources.InitPackageResourcesParam;
-import de.robv.android.xposed.callbacks.XC_LayoutInflated;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import de.robv.android.xposed.callbacks.XCallback;
 
@@ -105,6 +104,19 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 				hookSignalLevelFixes();
 			}
 			
+
+			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
+				try {
+					final int clockColor = pref.getInt("statusbar_clock_color", 0xffbebebe);
+					findAndHookMethod("com.android.systemui.statusbar.policy.Clock", lpparam.classLoader, "updateClock", new XC_MethodHook() {
+						@Override
+						protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+							TextView tv = (TextView) param.thisObject;
+							tv.setTextColor(clockColor);
+						}
+					});
+				} catch (Throwable t) { XposedBridge.log(t); }
+			}
 			
 		} else if (lpparam.packageName.equals("com.android.vending")) {
 			if (pref.getBoolean("vending_fake_240dpi", false)) {
@@ -159,21 +171,6 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 							return new ColorDrawable(statusbarColor);
 						}
 					});
-				} catch (Throwable t) { XposedBridge.log(t); }
-			}
-
-			if (pref.getBoolean("statusbar_clock_color_enabled", false)) {
-				try {
-					resparam.res.hookLayout("com.android.systemui", "layout", "tw_status_bar", new XC_LayoutInflated() {
-						@Override
-						public void handleLayoutInflated(LayoutInflatedParam liparam) throws Throwable {
-							try {
-								TextView clock = (TextView) liparam.view.findViewById(
-										liparam.res.getIdentifier("clock", "id", "com.android.systemui"));
-								clock.setTextColor(pref.getInt("statusbar_clock_color", 0xffbebebe));
-							} catch (Throwable t) { XposedBridge.log(t); }
-						}
-					}); 
 				} catch (Throwable t) { XposedBridge.log(t); }
 			}
 		}
