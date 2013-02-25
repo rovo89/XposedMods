@@ -39,6 +39,12 @@ public class XposedTweakbox implements IXposedHookZygoteInit, IXposedHookInitPac
 		
 		// this is not really necessary if no effects are wanted, but it speeds up turning off the screen
 		XResources.setSystemWideReplacement("android", "bool", "config_animateScreenLights", false);
+		
+		try {
+			XResources.setSystemWideReplacement("android", "bool", "config_allowAllRotations", pref.getBoolean("enable_all_rotation", false));
+		} catch (Throwable t) {
+			XposedBridge.log(t);
+		}
 
 		try {
 			XResources.setSystemWideReplacement("android", "bool", "config_unplugTurnsOnScreen",

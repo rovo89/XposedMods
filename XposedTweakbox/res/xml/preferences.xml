@@ -153,6 +153,12 @@
 
         <CheckBoxPreference
             android:defaultValue="false"
+            android:key="enable_all_rotation"
+            android:summary="Enable all rotation angles, including upside-down"
+            android:title="Enable all rotation angles" />
+        
+        <CheckBoxPreference
+            android:defaultValue="false"
             android:key="volume_keys_skip_track"
             android:summary="Skip to the next/previous track with a long press on the volume keys (only when the screen is off)"
             android:title="Skip tracks with volume keys" />
